@@ -130,11 +130,7 @@ ollama pull gemma4:e2b    # 신고자 챗봇용 (경량)
 ollama pull gemma4:e4b    # 관리자 RAG·챗봇용 (고품질)
 ```
 
-### 3. 모델 가중치 배치
 
-`models/README.md`의 다운로드 링크에서 파일을 받아 `models/` 디렉토리에 넣으세요:
-- `yolo26n_best.pt`
-- `yolov8m_seg_best.pt`
 
 ### 4. 데이터 파일 배치
 
@@ -157,11 +153,7 @@ pip install -r ../requirements.txt
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 6. 접속
 
-- 신고자 채팅 UI: http://localhost:8000
-- 관리자 대시보드: http://localhost:8000/admin
-- API 문서 (Swagger): http://localhost:8000/docs
 
 ## 🛠 사용 기술
 
