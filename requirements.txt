@@ -1,0 +1,31 @@
+# ── Web Framework ──
+fastapi>=0.100.0
+uvicorn>=0.20.0
+python-multipart>=0.0.5
+pydantic>=1.8.0
+
+# ── AI / ML ──
+ultralytics>=8.0.0          # YOLO Detection & Segmentation
+torch>=2.0.0
+opencv-python>=4.5.0        # SIFT Feature Matching
+ollama>=0.4.0               # LLM (Ollama Python SDK)
+
+# ── RAG / Vector DB ──
+chromadb>=0.5.0
+sentence-transformers>=3.0.0
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-community>=0.3.0
+
+# ── Data Processing ──
+numpy>=1.21.0
+pandas>=1.5.0
+scikit-learn>=1.0.0
+Pillow>=9.0.0
+PyYAML>=6.0
+Shapely                     # 역지오코딩 (행정구역 판별)
+
+# ── Utilities ──
+requests>=2.25.0
+python-dotenv>=0.19.0
+jinja2>=3.1.0

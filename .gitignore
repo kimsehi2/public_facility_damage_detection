@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 런타임 생성 파일 (Git 추적 불필요)
+server/uploads/
+server/live_reports.json
+server/chat_logs.json
+server/admin_users.json
+server/data/admin_sessions.json
+server/reports.db
+
+# 대용량 데이터 (README의 다운로드 안내 참고)
+data/chroma_est/
+data/*.csv
+!data/sample/
+
+# 환경 변수
+.env

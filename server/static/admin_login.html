@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>관리자 로그인 — 시설관리 대시보드</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    background: linear-gradient(135deg, #1B3E8E 0%, #4A90D9 100%);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .card {
+    width: 100%; max-width: 380px; background: white;
+    border-radius: 16px; padding: 28px 24px; box-shadow: 0 10px 40px rgba(0,0,0,.2);
+  }
+  .logo { font-size: 36px; text-align: center; margin-bottom: 6px; }
+  h1 { font-size: 18px; text-align: center; color: #333; margin-bottom: 3px; }
+  .sub { font-size: 12px; text-align: center; color: #888; margin-bottom: 20px; }
+  .field { margin-bottom: 12px; }
+  label { display: block; font-size: 12px; color: #555; margin-bottom: 5px; font-weight: 600; }
+  input {
+    width: 100%; padding: 11px 12px; border: 1px solid #ddd; border-radius: 10px;
+    font-size: 14px; outline: none;
+  }
+  input:focus { border-color: #4A90D9; }
+  .btn {
+    width: 100%; padding: 12px;
+    background: linear-gradient(135deg, #1B3E8E 0%, #4A90D9 100%);
+    color: white; border: none;
+    border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
+    margin-top: 10px;
+  }
+  .btn:hover:not(:disabled) { filter: brightness(1.05); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .err {
+    color: #c11; background: #FEE; border: 1px solid #FCC; padding: 10px;
+    border-radius: 8px; font-size: 12px; margin-bottom: 12px; display: none;
+  }
+  .err.show { display: block; }
+  .meta {
+    font-size: 11px; text-align: center; color: #aaa; margin-top: 16px;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">🛠️</div>
+  <h1>시설관리 대시보드</h1>
+  <div class="sub">관리자 전용 · 로그인 후 이용 가능</div>
+
+  <div id="err" class="err"></div>
+
+  <div class="field">
+    <label for="uid">관리자 ID</label>
+    <input id="uid" placeholder="username" autofocus
+           onkeydown="if(event.key==='Enter') next()"/>
+  </div>
+  <div class="field">
+    <label for="pw">비밀번호</label>
+    <input id="pw" type="password"
+           onkeydown="if(event.key==='Enter') login()"/>
+  </div>
+
+  <button class="btn" id="submit" onclick="login()">로그인</button>
+
+  <div class="meta">
+    데모 환경 · 기본 계정 admin/admin (배포 전 반드시 변경)
+  </div>
+</div>
+
+<script>
+function next() { document.getElementById("pw").focus(); }
+function showErr(msg) {
+  const e = document.getElementById("err");
+  e.textContent = msg; e.classList.add("show");
+}
+function clearErr() { document.getElementById("err").classList.remove("show"); }
+
+async function login() {
+  clearErr();
+  const uid = document.getElementById("uid").value.trim();
+  const pw  = document.getElementById("pw").value;
+  if (!uid || !pw) { showErr("아이디와 비밀번호를 모두 입력해주세요."); return; }
+  const btn = document.getElementById("submit");
+  btn.disabled = true; btn.textContent = "확인중…";
+  try {
+    const r = await fetch("/api/admin/login", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ username: uid, password: pw }),
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      let msg = "로그인 실패";
+      try { msg = JSON.parse(t).detail || msg; } catch {}
+      showErr(msg);
+      return;
+    }
+    const info = await r.json();
+    localStorage.setItem("admin_session", JSON.stringify({
+      token: info.token, username: info.username, name: info.name,
+      region: info.region || null,
+      login_at: new Date().toISOString(),
+    }));
+    location.href = "/admin";
+  } catch (e) {
+    showErr("네트워크 오류: " + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "로그인";
+  }
+}
+
+// 이미 로그인된 경우 대시보드로
+if (localStorage.getItem("admin_session")) {
+  location.href = "/admin";
+}
+</script>
+</body>
+</html>

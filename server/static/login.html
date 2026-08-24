@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>공공시설 파손 신고 — 로그인</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    background: linear-gradient(135deg, #FEE4E2 0%, #FFEDD5 100%);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .card {
+    width: 100%; max-width: 380px; background: white;
+    border-radius: 16px; padding: 28px 24px; box-shadow: 0 10px 40px rgba(0,0,0,.1);
+  }
+  .logo { font-size: 36px; text-align: center; margin-bottom: 6px; }
+  h1 { font-size: 18px; text-align: center; color: #333; margin-bottom: 3px; }
+  .sub { font-size: 12px; text-align: center; color: #888; margin-bottom: 20px; }
+  .field { margin-bottom: 12px; }
+  label { display: block; font-size: 12px; color: #555; margin-bottom: 5px; font-weight: 600; }
+  input {
+    width: 100%; padding: 11px 12px; border: 1px solid #ddd; border-radius: 10px;
+    font-size: 14px; outline: none;
+  }
+  input:focus { border-color: #1B3E8E; }
+  .hint { font-size: 11px; color: #999; margin-top: 4px; }
+  .btn {
+    width: 100%; padding: 12px; background: #1B3E8E; color: white; border: none;
+    border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
+    margin-top: 10px;
+  }
+  .btn:hover:not(:disabled) { background: #152E6B; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .err {
+    color: #c11; background: #FEE; border: 1px solid #FCC; padding: 10px;
+    border-radius: 8px; font-size: 12px; margin-bottom: 12px; display: none;
+  }
+  .err.show { display: block; }
+  .meta {
+    font-size: 11px; text-align: center; color: #aaa; margin-top: 16px;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">🛠️</div>
+  <h1>공공시설 파손 신고</h1>
+  <div class="sub">전국 어디서든 신고 조회·접수가 가능합니다. 로그인해주세요</div>
+
+  <div id="err" class="err"></div>
+
+  <div class="field">
+    <label for="uid">아이디</label>
+    <input id="uid" placeholder="예: USER_1002" autofocus onkeydown="if(event.key==='Enter')next()"/>
+    <div class="hint">User_ID (예: USER_1002)</div>
+  </div>
+  <div class="field">
+    <label for="c4">연락처 뒤 4자리</label>
+    <input id="c4" type="tel" inputmode="numeric" maxlength="4" placeholder="숫자 4자리"
+           onkeydown="if(event.key==='Enter')login()"/>
+    <div class="hint">등록된 휴대폰 번호의 마지막 4자리</div>
+  </div>
+
+  <button class="btn" id="submit" onclick="login()">로그인</button>
+
+  <details style="margin-top:14px;">
+    <summary style="cursor:pointer;text-align:center;color:#1B3E8E;font-size:13px;font-weight:600;">
+      처음이신가요? 회원가입
+    </summary>
+    <div style="margin-top:12px;padding:12px;background:#F5F7FA;border-radius:10px;">
+      <div class="field">
+        <label for="su-name">이름</label>
+        <input id="su-name" placeholder="홍길동"/>
+      </div>
+      <div class="field">
+        <label for="su-contact">연락처</label>
+        <input id="su-contact" placeholder="010-1234-5678" inputmode="tel"/>
+        <div class="hint">뒤 4자리가 로그인 PIN 이 됩니다</div>
+      </div>
+      <button class="btn" id="signup-btn" onclick="signup()">회원가입</button>
+    </div>
+  </details>
+
+  <div class="meta">
+    데모 환경 — 실서비스는 휴대폰/OTP 인증으로 대체됩니다<br>
+    ⚠️ 본인 신고 내역만 조회·관리됩니다
+  </div>
+</div>
+
+<script>
+function next() { document.getElementById("c4").focus(); }
+function showErr(msg) {
+  const e = document.getElementById("err");
+  e.textContent = msg; e.classList.add("show");
+}
+function clearErr() { document.getElementById("err").classList.remove("show"); }
+
+async function login() {
+  clearErr();
+  const uid = document.getElementById("uid").value.trim();
+  const c4  = document.getElementById("c4").value.trim();
+  if (!uid || !c4) { showErr("아이디와 연락처 뒤 4자리를 모두 입력해주세요."); return; }
+  if (!/^\d{4}$/.test(c4)) { showErr("연락처 뒤 4자리는 숫자 4자리여야 합니다."); return; }
+  const btn = document.getElementById("submit");
+  btn.disabled = true; btn.textContent = "확인중…";
+  try {
+    const r = await fetch("/api/citizen/login", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ user_id: uid, contact4: c4 }),
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      let msg = "로그인 실패";
+      try { msg = JSON.parse(t).detail || msg; } catch {}
+      showErr(msg);
+      return;
+    }
+    const info = await r.json();
+    localStorage.setItem("citizen_session", JSON.stringify({
+      user_id: info.user_id, name: info.name, contact: info.contact,
+      login_at: new Date().toISOString(),
+    }));
+    location.href = "/";
+  } catch (e) {
+    showErr("네트워크 오류: " + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "로그인";
+  }
+}
+
+async function signup() {
+  clearErr();
+  const name = document.getElementById("su-name").value.trim();
+  const contact = document.getElementById("su-contact").value.trim();
+  if (!name || !contact) { showErr("이름과 연락처를 모두 입력해주세요."); return; }
+  if (!/^[\d\-\s]{9,}$/.test(contact)) { showErr("연락처는 숫자 9자리 이상 (예: 010-1234-5678)"); return; }
+  const btn = document.getElementById("signup-btn");
+  btn.disabled = true; btn.textContent = "등록중…";
+  try {
+    const r = await fetch("/api/citizen/signup", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ name, contact }),
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      let msg = "회원가입 실패";
+      try { msg = JSON.parse(t).detail || msg; } catch {}
+      showErr(msg);
+      return;
+    }
+    const info = await r.json();
+    // 자동으로 로그인 폼 채워줌 — 사용자는 "로그인" 버튼만 누르면 됨
+    document.getElementById("uid").value = info.user_id;
+    document.getElementById("c4").value = info.contact4;
+    alert(`회원가입 완료! 🎉\n발급된 아이디: ${info.user_id}\n(이 아이디는 본인 연락처와 함께 메모해두세요)\n\n'로그인' 버튼을 누르면 바로 입장합니다.`);
+  } catch (e) {
+    showErr("네트워크 오류: " + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "회원가입";
+  }
+}
+
+// 이미 로그인된 경우 메인으로
+if (localStorage.getItem("citizen_session")) {
+  location.href = "/";
+}
+</script>
+</body>
+</html>

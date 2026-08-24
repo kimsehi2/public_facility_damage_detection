@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>시설관리 대시보드</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    background: #F3F4F7; color: #222; }
+  .header { background: linear-gradient(135deg,#1B3E8E 0%,#4A90D9 100%);
+    color: white; padding: 18px 24px; display: flex; justify-content: space-between;
+    align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,.1); }
+  .header h1 { font-size: 20px; }
+  .header .sub { font-size: 12px; opacity: .85; margin-top: 2px; }
+  .btn { padding: 8px 14px; border: none; border-radius: 8px; font-weight: 600;
+    cursor: pointer; font-size: 13px; }
+  .btn:hover:not(:disabled) { filter: brightness(.95); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.primary { background: #1B3E8E; color: white; }
+  .btn.light { background: white; color: #333; border: 1px solid #ddd; }
+  .btn.sm { padding: 6px 10px; font-size: 12px; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px; margin-bottom: 20px; }
+  .stat { background: white; border-radius: 10px; padding: 16px 18px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+  .stat .k { font-size: 12px; color: #777; margin-bottom: 6px; }
+  .stat .v { font-size: 26px; font-weight: 700; }
+  .stat.crit .v { color: #E53E3E; }
+  .stat.high .v { color: #F59E0B; }
+  .stat.med  .v { color: #D97706; }
+  .stat.low  .v { color: #16A34A; }
+  .main { display: grid; grid-template-columns: 1.2fr 1fr; gap: 18px; margin-bottom: 20px; }
+  @media (max-width: 960px) { .main { grid-template-columns: 1fr; } }
+  .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    overflow: hidden; }
+  .card h3 { font-size: 14px; padding: 12px 16px; border-bottom: 1px solid #eee;
+    background: #fafafa; display: flex; justify-content: space-between; align-items: center; }
+  #map { height: 460px; }
+  .filters { display: flex; gap: 8px; padding: 10px 16px;
+    border-bottom: 1px solid #eee; background: #fafafa; flex-wrap: wrap; }
+  .filters input, .filters select { padding: 6px 10px; border: 1px solid #ddd;
+    border-radius: 6px; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; }
+  th { background: #fafafa; font-weight: 600; color: #555; }
+  tr.row { cursor: pointer; }
+  tr.row:hover { background: #f8f9ff; }
+  .risk-badge { display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-weight: 700; font-size: 11px; }
+  .risk-crit { background: #FEE2E2; color: #B91C1C; }
+  .risk-high { background: #FEF3C7; color: #B45309; }
+  .risk-med  { background: #FFF7DA; color: #A16207; }
+  .risk-low  { background: #DCFCE7; color: #15803D; }
+  .status-badge { display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 11px; background: #EFF6FF; color: #1E40AF; }
+  .status-completed { background: #DCFCE7; color: #15803D; }
+  .status-in_progress { background: #FEF3C7; color: #B45309; }
+  .status-rejected { background: #FEE2E2; color: #B91C1C; }
+  .tools { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+  .tabs { display: flex; border-bottom: 1px solid #eee; }
+  .tab { padding: 12px 18px; cursor: pointer; font-size: 13px; font-weight: 600;
+    color: #777; border-bottom: 2px solid transparent; }
+  .tab.active { color: #1B3E8E; border-bottom-color: #1B3E8E; }
+  .tab-panel { display: none; padding: 18px; }
+  .tab-panel.active { display: block; }
+  .form-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .form-row input, .form-row select {
+    padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px;
+  }
+  .form-row .flex { flex: 1; min-width: 200px; }
+  .result { background: #fafafa; border-radius: 8px; padding: 14px;
+    font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px; margin-bottom: 12px; }
+  .metric { background: #F3F4F7; padding: 10px; border-radius: 8px; }
+  .metric .k { font-size: 10px; color: #777; }
+  .metric .v { font-size: 15px; font-weight: 700; color: #333; }
+  /* 감정평가서 양식 */
+  .appraisal { font-family: 'Nanum Myeongjo', 'Batang', serif; color: #222; }
+  .appraisal .title-bar {
+    background: #EEF2F7; border-left: 4px solid #1B3E8E;
+    padding: 10px 14px; margin: 18px 0 10px;
+    font-weight: 700; font-size: 15px; letter-spacing: .5px;
+  }
+  .appraisal .subtitle {
+    font-size: 13px; color: #444; margin: 14px 0 6px; font-weight: 600;
+  }
+  .appraisal .source-note {
+    text-align: right; font-size: 11px; color: #666; margin-bottom: 4px;
+  }
+  .appraisal table.form {
+    width: 100%; border-collapse: collapse; font-size: 12.5px;
+    border-top: 2px solid #333; border-bottom: 2px solid #333;
+    background: white;
+  }
+  .appraisal table.form th, .appraisal table.form td {
+    border: 1px solid #bbb; padding: 8px 10px; text-align: center;
+  }
+  .appraisal table.form thead th {
+    background: #F5F5F0; font-weight: 700;
+  }
+  .appraisal table.form tbody tr:nth-child(even) { background: #FAFAFA; }
+  .appraisal table.form td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .appraisal table.form tfoot td {
+    background: #F5F5F0; font-weight: 700;
+  }
+  .appraisal .opinion {
+    border: 1px solid #ccc; background: #FDFDF9; padding: 16px 18px;
+    font-size: 13px; line-height: 1.9; margin-top: 14px;
+    text-align: justify; white-space: pre-wrap;
+  }
+  /* 상단 KPI 카드 그리드 */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 14px; margin-bottom: 20px; }
+  .kpi-card { background: white; border-radius: 14px; padding: 18px 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.06); display: flex; align-items: center; gap: 14px; }
+  .kpi-icon { width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 26px; }
+  .kpi-icon.blue   { background: #DBEAFE; color: #2563EB; }
+  .kpi-icon.red    { background: #FEE2E2; color: #DC2626; }
+  .kpi-icon.green  { background: #DCFCE7; color: #16A34A; }
+  .kpi-icon.yellow { background: #FEF3C7; color: #D97706; }
+  .kpi-icon.purple { background: #EDE9FE; color: #7C3AED; }
+  .kpi-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .kpi-label { font-size: 12px; color: #6B7280; font-weight: 500; }
+  .kpi-value { font-size: 26px; font-weight: 800; color: #111827;
+    font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .kpi-value .unit { font-size: 14px; font-weight: 600; color: #4B5563; margin-left: 3px; }
+  .kpi-sub { font-size: 11px; color: #9CA3AF; }
+  .modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none;
+    align-items: center; justify-content: center; padding: 20px; z-index: 2000;
+  }
+  .modal.open { display: flex; }
+  .modal-inner { background: white; border-radius: 12px; padding: 20px;
+    max-width: 720px; width: 100%; max-height: 88vh; overflow-y: auto; }
+  .modal-inner img.detail-img { width: 100%; border-radius: 8px; margin-bottom: 12px;
+    cursor: zoom-in; transition: filter .1s; }
+  .modal-inner img.detail-img:hover { filter: brightness(.95); }
+  .modal-inner .row { display: flex; justify-content: space-between;
+    padding: 4px 0; font-size: 13px; }
+  .modal-inner .row .k { color: #777; }
+  #detail-map { height: 260px; border-radius: 8px; margin: 10px 0 14px;
+    border: 1px solid #eee; }
+  .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.92);
+    display: none; align-items: center; justify-content: center;
+    z-index: 3000; cursor: zoom-out; padding: 20px; }
+  .lightbox.open { display: flex; }
+  .lightbox img { max-width: 95vw; max-height: 95vh; object-fit: contain;
+    border-radius: 6px; box-shadow: 0 4px 30px rgba(0,0,0,.5); }
+  .lightbox .hint-close { position: absolute; top: 14px; right: 18px;
+    color: white; font-size: 13px; opacity: .7; }
+
+  /* 플로팅 어드민 챗 */
+  .chat-fab {
+    position: fixed; right: 24px; bottom: 24px;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: linear-gradient(135deg,#1B3E8E 0%,#4A90D9 100%);
+    color: white; border: none; cursor: pointer; font-size: 22px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.25);
+    z-index: 1500; transition: transform .15s;
+  }
+  .chat-fab:hover { transform: scale(1.06); }
+  .chat-panel {
+    position: fixed; right: 24px; bottom: 92px;
+    width: 380px; height: 520px; max-height: 70vh;
+    background: white; border-radius: 14px; display: none;
+    flex-direction: column; overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0,0,0,.25); z-index: 1500;
+  }
+  .chat-panel.open { display: flex; }
+  .chat-head {
+    background: linear-gradient(135deg,#1B3E8E 0%,#4A90D9 100%);
+    color: white; padding: 12px 16px; display: flex;
+    justify-content: space-between; align-items: center; font-weight: 600;
+  }
+  .chat-head .close { cursor: pointer; font-size: 18px; opacity: .85; }
+  .chat-body { flex: 1; overflow-y: auto; padding: 14px;
+    background: #F5F7FA; font-size: 13px; line-height: 1.5; }
+  .chat-msg { margin-bottom: 10px; display: flex; }
+  .chat-msg.bot { justify-content: flex-start; }
+  .chat-msg.user { justify-content: flex-end; }
+  .chat-bubble { max-width: 80%; padding: 8px 12px; border-radius: 12px;
+    white-space: pre-wrap; word-break: break-word; }
+  .chat-msg.bot .chat-bubble { background: white; border: 1px solid #eee; }
+  .chat-msg.user .chat-bubble { background: #1B3E8E; color: white; }
+  .chat-input-row { display: flex; gap: 6px; padding: 10px; border-top: 1px solid #eee; }
+  .chat-input-row input { flex: 1; padding: 8px 10px; border: 1px solid #ddd;
+    border-radius: 8px; font-size: 13px; }
+  .chat-input-row button { padding: 8px 14px; background: #1B3E8E; color: white;
+    border: none; border-radius: 8px; font-size: 13px; cursor: pointer; }
+  .chat-input-row button:disabled { opacity: .5; cursor: not-allowed; }
+  .chat-hint { color: #888; font-size: 11px; padding: 4px 14px 10px;
+    text-align: center; background: #F5F7FA; }
+  .chat-quick { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 10px;
+    background: #F5F7FA; }
+  .chat-quick button { font-size: 11px; padding: 4px 10px; background: white;
+    border: 1px solid #ddd; border-radius: 12px; cursor: pointer; color: #555; }
+  .chat-quick button:hover { background: #EEF; }
+
+  /* SSE 토스트 */
+  .toast-stack {
+    position: fixed; top: 20px; right: 20px; z-index: 2500;
+    display: flex; flex-direction: column; gap: 8px; max-width: 340px;
+  }
+  .toast {
+    background: white; border-left: 4px solid #1B3E8E; border-radius: 8px;
+    padding: 10px 14px; box-shadow: 0 4px 14px rgba(0,0,0,.15);
+    font-size: 13px; animation: slide-in .2s ease-out;
+  }
+  .toast.crit { border-left-color: #E53E3E; }
+  .toast.high { border-left-color: #F59E0B; }
+  .toast .ttl { font-weight: 700; margin-bottom: 3px; }
+  .toast .lnk { color: #1B3E8E; cursor: pointer; text-decoration: underline; font-size: 12px; }
+  @keyframes slide-in { from { opacity: 0; transform: translateX(20px); } to {} }
+  .sse-status {
+    position: fixed; bottom: 12px; left: 12px; font-size: 11px;
+    color: #666; background: rgba(255,255,255,.9); padding: 4px 10px;
+    border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.1); z-index: 1400;
+  }
+  .sse-status .dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: #ccc; margin-right: 4px; vertical-align: middle;
+  }
+  .sse-status.live .dot { background: #22c55e; animation: pulse 1.6s infinite; }
+  .sse-status.down .dot { background: #E53E3E; }
+  @keyframes pulse { 50% { opacity: .4; } }
+  .hint { color: #999; font-size: 12px; text-align: center; padding: 14px; }
+  .spinner {
+    display: inline-block; width: 14px; height: 14px; border: 2px solid #ccc;
+    border-top-color: #1B3E8E; border-radius: 50%; animation: spin .8s linear infinite;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <h1 id="dash-title">🏛️ 시설관리 대시보드</h1>
+    <div class="sub">민원 위험도 기반 우선순위 관리 · RAG 의사결정 지원</div>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <span id="admin-user" style="font-size:12px;opacity:.9"></span>
+    <button class="btn light sm" onclick="loadAll()">🔄 새로고침</button>
+    <button class="btn light sm" onclick="adminLogout()">로그아웃</button>
+  </div>
+</div>
+
+<div class="container">
+  <section class="kpi-grid" id="stats"></section>
+
+  <section class="main">
+    <div class="card">
+      <h3>🗺️ 위험도 맵 <span class="hint" id="map-hint"></span></h3>
+      <div id="map"></div>
+    </div>
+    <div class="card">
+      <h3>⚠️ 위험도 TOP <span class="hint" id="list-hint"></span></h3>
+      <div class="filters">
+        <select id="f-status">
+          <option value="active" selected>활성만 (접수+처리중)</option>
+          <option value="">상태 전체</option>
+          <option value="pending">접수</option>
+          <option value="in_progress">처리중</option>
+          <option value="completed">완료</option>
+          <option value="rejected">반려</option>
+        </select>
+        <input id="f-min-risk" type="number" step="0.5" placeholder="최소 위험도"/>
+        <button class="btn light sm" onclick="loadReports()">필터 적용</button>
+      </div>
+      <div id="reports-table"></div>
+    </div>
+  </section>
+
+  <!-- 보고서 작성 섹션 (긴급도 TOP 바로 아래) -->
+  <section class="tools">
+    <div class="tab-panel active" id="tab-report" style="padding:14px;">
+      <h3 style="margin:0 0 10px 0;">📋 민원 처리계획 보고서 <span class="hint">신고 ID 직접 입력 (자동완성 지원) → 공문 양식 (1.민원개요 / 2.가.파손내용 나.수리사례 다.예상수리비)</span></h3>
+      <div class="form-row">
+        <input type="text" class="flex" id="r-rid" list="r-rid-list"
+               placeholder="신고 ID 입력 (예: LIVE_93F637E9)"
+               style="text-transform:uppercase"
+               autocomplete="off"/>
+        <datalist id="r-rid-list"></datalist>
+        <button class="btn primary" onclick="doReport()">보고서 생성</button>
+      </div>
+      <div id="report-result"></div>
+    </div>
+  </section>
+
+  <!-- 긴급도 DB 갤러리 (하단) -->
+  <section class="main" style="margin-top:18px">
+    <div class="card" style="grid-column: 1 / -1;">
+      <h3>🚨 긴급도 DB <span class="hint" id="emg-hint">같은 물품(feature matching) 으로 묶인 그룹 · Final_Score 내림차순</span></h3>
+      <div id="emergency-groups" style="padding:12px"></div>
+    </div>
+  </section>
+</div>
+
+<div class="modal" id="modal" onclick="if(event.target===this) closeModal()">
+  <div class="modal-inner" id="modal-body"></div>
+</div>
+
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <span class="hint-close">클릭해서 닫기</span>
+  <img id="lightbox-img" alt="확대 이미지"/>
+</div>
+
+<div class="toast-stack" id="toast-stack"></div>
+<div class="sse-status" id="sse-status"><span class="dot"></span><span id="sse-text">연결중…</span></div>
+
+<button class="chat-fab" id="chat-fab" title="관리 도우미 챗봇" onclick="toggleChat()">💬</button>
+<div class="chat-panel" id="chat-panel">
+  <div class="chat-head">
+    <span>🤖 관리 도우미</span>
+    <span class="close" onclick="toggleChat()">✕</span>
+  </div>
+  <div class="chat-body" id="chat-body">
+    <div class="chat-msg bot"><div class="chat-bubble">
+      안녕하세요 👋 신고 현황·우선순위 관련 질문에 답해드려요.
+      아래 버튼이나 직접 입력해보세요.
+    </div></div>
+  </div>
+  <div class="chat-quick" id="chat-quick">
+    <button onclick="askQuick('가장 처리 시급한 3건 추천해줘. 위험도·학교 근접성·경과일 근거와 함께.')">🚨 시급 TOP 3</button>
+    <button onclick="fillQuick('(예: 볼라드) 품목 (예: 3)단계 파손의 평균 수리비를 알려주세요. 과거 견적 기반으로.')">💰 견적 조회</button>
+  </div>
+  <div class="chat-input-row">
+    <input id="chat-input" placeholder="질문 입력 후 Enter"
+           onkeydown="if(event.key==='Enter') sendChat()"/>
+    <button id="chat-send" onclick="sendChat()">전송</button>
+  </div>
+  <div class="chat-hint">답변은 현재 저장된 신고 데이터 기반입니다</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const state = { map: null, markerLayer: null, reports: [], detailMap: null,
+                chatHistory: [] };
+
+// ── 관리자 세션 ───────────────────────────────────────
+const ADMIN = (() => {
+  try { return JSON.parse(localStorage.getItem("admin_session") || "null"); }
+  catch { return null; }
+})();
+if (!ADMIN || !ADMIN.token) {
+  location.replace("/admin/login");
+}
+// 관리자 region 따라 상단 타이틀 동적 교체 (예: seoul 로그인 → "서울특별시 시설관리 대시보드")
+if (ADMIN && ADMIN.region && ADMIN.region.label) {
+  const _t = document.getElementById("dash-title");
+  if (_t) _t.textContent = `🏛️ ${ADMIN.region.label} 시설관리 대시보드`;
+}
+function adminLogout() {
+  fetch("/api/admin/logout", {
+    method: "POST",
+    headers: { "X-Admin-Token": ADMIN ? ADMIN.token : "" },
+  }).finally(() => {
+    localStorage.removeItem("admin_session");
+    location.href = "/admin/login";
+  });
+}
+
+// ── 플로팅 챗봇 ───────────────────────────────────────
+function toggleChat() {
+  const p = document.getElementById("chat-panel");
+  p.classList.toggle("open");
+  if (p.classList.contains("open")) {
+    setTimeout(()=>document.getElementById("chat-input").focus(), 50);
+  }
+}
+function chatAppend(role, text) {
+  const body = document.getElementById("chat-body");
+  const div = document.createElement("div");
+  div.className = "chat-msg " + role;
+  div.innerHTML = `<div class="chat-bubble">${fmt(text)}</div>`;
+  body.appendChild(div);
+  body.scrollTop = body.scrollHeight;
+}
+async function sendChat() {
+  const input = document.getElementById("chat-input");
+  const btn = document.getElementById("chat-send");
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = "";
+  chatAppend("user", msg);
+  state.chatHistory.push({ role: "user", text: msg });
+  btn.disabled = true;
+  // 로딩 표시
+  const body = document.getElementById("chat-body");
+  const tmp = document.createElement("div");
+  tmp.className = "chat-msg bot";
+  tmp.innerHTML = `<div class="chat-bubble"><span class="spinner"></span> 생각중…</div>`;
+  body.appendChild(tmp); body.scrollTop = body.scrollHeight;
+  try {
+    const res = await api("/api/admin/chat", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: msg, history: state.chatHistory.slice(-10) }),
+    });
+    tmp.remove();
+    chatAppend("bot", res.reply || "(빈 응답)");
+    state.chatHistory.push({ role: "assistant", text: res.reply });
+  } catch (e) {
+    tmp.remove();
+    chatAppend("bot", "⚠️ 오류: " + e.message);
+  } finally { btn.disabled = false; }
+}
+function askQuick(q) {
+  document.getElementById("chat-input").value = q;
+  sendChat();
+}
+function fillQuick(q) {
+  // 채팅창에 예시 안내만 표시 (입력창은 비움). 사용자가 괄호 부분 채워서 직접 입력.
+  chatAppend("bot", `💡 예시: ${q}\n\n괄호 부분을 실제 값으로 바꿔서 직접 입력해주세요.`);
+  document.getElementById("chat-input").focus();
+}
+
+function esc(s) {
+  return (s||"").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
+                           .replace(/>/g,"&gt;").replace(/\n/g,"<br>");
+}
+function fmt(s) { return esc(s).replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>"); }
+async function api(path, opts={}) {
+  opts.headers = Object.assign({}, opts.headers, {
+    "X-Admin-Token": ADMIN ? ADMIN.token : "",
+  });
+  const r = await fetch(path, opts);
+  if (r.status === 401) {
+    localStorage.removeItem("admin_session");
+    location.replace("/admin/login");
+    throw new Error("세션 만료");
+  }
+  if (!r.ok) throw new Error(`API ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+function riskClass(v) {
+  // 새 1/2/3 식 임계 (risk_tier 와 일치) — 객체위험계수 0.7~1.0
+  if (v >= 2.4) return "risk-crit";
+  if (v >= 1.9) return "risk-high";
+  if (v >= 1.3) return "risk-med";
+  return "risk-low";
+}
+function tierColor(c) {
+  return ({ red:"#E53E3E", orange:"#F59E0B", beige:"#D97706", green:"#16A34A" })[c] || "#666";
+}
+function statusLabel(s) {
+  return ({pending:"접수", in_progress:"처리중", completed:"완료", rejected:"반려"})[s] || s;
+}
+
+async function loadAll() {
+  document.getElementById("map-hint").innerHTML = '<span class="spinner"></span>';
+  try {
+    const rm = await api("/api/admin/risk-map");
+    renderStats(rm.stats);
+    state.reports = rm.reports;
+    renderMap(rm.reports);
+    document.getElementById("map-hint").textContent = "";
+  } catch (e) {
+    document.getElementById("map-hint").textContent = "로드 실패";
+  }
+  // 병렬 로드. emergency 가 먼저 끝나든 나중이든 OK — loadEmergency 가 끝날 때 reports 재렌더.
+  await Promise.all([loadReports(), loadCatalog(), loadEmergency()]);
+}
+
+async function loadEmergency() {
+  const el = document.getElementById("emergency-groups");
+  const hint = document.getElementById("emg-hint");
+  if (!el) return;
+  el.innerHTML = '<div class="hint" style="padding:10px">로딩 중...</div>';
+  try {
+    const res = await api("/api/admin/emergency");
+    hint.textContent = `${res.total} 그룹`;
+    renderEmergencyGroups(res.groups || []);
+  } catch (e) {
+    el.innerHTML = `<div class="hint">로드 실패: ${esc(String(e))}</div>`;
+  }
+}
+
+function renderEmergencyGroups(groups) {
+  state.emergencyGroups = groups;
+  // reports 가 emergency 보다 먼저 도착했으면 그땐 단일 점수로 그렸을 것 — 그룹 점수로 재렌더
+  if (state.lastReportsRes) renderReportsTable(state.lastReportsRes);
+  const el = document.getElementById("emergency-groups");
+  if (!groups.length) {
+    el.innerHTML = `<div class="hint">active 그룹이 없습니다 (처리 대기중/처리중 신고 없음).</div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px">
+    ${groups.map(g => {
+      const tierColorCss = {red:"#E53E3E",orange:"#DD6B20",beige:"#D69E2E",green:"#38A169"}[g.tier.color] || "#718096";
+      const addr = (g.address && g.address.address) ? g.address.address : "";
+      const img = g.representative_image_url || "";
+      return `
+        <div style="border:1px solid #eee;border-radius:10px;overflow:hidden;background:white;cursor:pointer"
+             onclick="showGroupDetail('${esc(g.group_id)}')">
+          <div style="position:relative;aspect-ratio:16/9;background:#F7FAFC">
+            ${img ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'"/>` : ""}
+            <div style="position:absolute;top:8px;left:8px;background:${tierColorCss};color:white;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700">
+              ${g.tier.emoji} ${g.final_score}
+            </div>
+            <div style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.6);color:white;padding:4px 8px;border-radius:6px;font-size:11px">
+              👥 ${g.frequency}건
+            </div>
+          </div>
+          <div style="padding:10px 12px">
+            <div style="font-weight:600;margin-bottom:4px">${esc(g.item)} · 손상도 ${g.max_damage_rate}</div>
+            <div style="font-size:11px;color:#666;margin-bottom:4px">
+              <code style="background:#F0F4FF;padding:1px 5px;border-radius:3px">${esc(g.group_id)}</code>
+            </div>
+            ${addr ? `<div style="font-size:11px;color:#1B3E8E;margin-bottom:4px">📍 ${esc(addr)}</div>` : ""}
+            <div style="font-size:11px;color:#888">
+              최초 ${(g.first_report_date||"").slice(0,10)} · 경과 ${g.elapsed_days}일 · 활성 ${g.active_count} · 완료 ${g.completed_count}
+            </div>
+          </div>
+        </div>`;
+    }).join("")}
+    </div>
+  `;
+}
+
+function showGroupDetail(gid) {
+  // emergency cache 에서 찾기
+  const g = (state.emergencyGroups || []).find(x => x.group_id === gid);
+  if (!g) { alert("그룹 정보 없음 — 새로고침 해주세요."); return; }
+  const body = document.getElementById("modal-body");
+  const tierColorCss = {red:"#E53E3E",orange:"#DD6B20",beige:"#D69E2E",green:"#38A169"}[g.tier.color] || "#718096";
+  body.innerHTML = `
+    <h3 style="margin-bottom:10px">${g.tier.emoji} 그룹 ${esc(g.group_id)}</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <span class="risk-badge" style="background:${tierColorCss};color:white">Final ${g.final_score}</span>
+      <span class="risk-badge" style="background:#EDF2F7;color:#2D3748">누적 ${g.frequency}건</span>
+      <span class="risk-badge" style="background:#EDF2F7;color:#2D3748">경과 ${g.elapsed_days}일</span>
+      <span class="risk-badge" style="background:#EDF2F7;color:#2D3748">최대손상 ${g.max_damage_rate}</span>
+    </div>
+    <div class="row"><span class="k">품목</span><span><b>${esc(g.item)}</b></span></div>
+    <div class="row"><span class="k">주소</span><span>${esc((g.address||{}).address||"-")}</span></div>
+    <div class="row"><span class="k">최초 → 최근</span><span>${(g.first_report_date||"").slice(0,10)} → ${(g.last_report_date||"").slice(0,10)}</span></div>
+    <div style="margin-top:14px"><b>📋 멤버 신고 (${(g.members||[]).length}건)</b></div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;max-height:360px;overflow-y:auto">
+    ${(g.members||[]).map(m => `
+      <div style="display:flex;gap:10px;padding:8px;border:1px solid #eee;border-radius:8px;cursor:pointer"
+           onclick="closeModal(); setTimeout(()=>showDetail('${esc(m.id)}'),50);">
+        ${m.image_url ? `<img src="${m.image_url}" style="width:70px;height:70px;object-fit:cover;border-radius:6px"/>` : ""}
+        <div style="flex:1;font-size:12px">
+          <div><b>${esc(m.id)}</b> · 손상 ${m.damage_rate} · 위험도 ${m.risk_score}</div>
+          <div style="color:#666">${(m.created_at||"").replace("T"," ").slice(0,16)} · <span class="status-badge status-${m.status}">${statusLabel(m.status)}</span></div>
+          ${m.duplicate_of ? `<div style="color:#C05621">🔁 ${esc(m.duplicate_of)}와 매치 ${m.match_score||0}</div>` : ""}
+        </div>
+      </div>
+    `).join("")}
+    </div>
+    <div style="margin-top:16px;text-align:right">
+      <button class="btn light sm" onclick="closeModal()">닫기</button>
+    </div>
+  `;
+  document.getElementById("modal").classList.add("open");
+}
+
+async function loadCatalog() {
+  try {
+    const c = await api("/api/admin/catalog");
+    const itemSel = document.getElementById("e-item");
+    const gidSel  = document.getElementById("b-gid");
+    if (itemSel && c.items) {
+      const cur = itemSel.value;
+      itemSel.innerHTML = `<option value="">— 품목 선택 —</option>` +
+        c.items.map(i => `<option value="${esc(i)}" ${cur===i?"selected":""}>${esc(i)}</option>`).join("");
+    }
+    if (gidSel && c.group_ids) {
+      const cur = gidSel.value;
+      gidSel.innerHTML = `<option value="">— Group_ID 선택 —</option>` +
+        c.group_ids.map(g => `<option value="${esc(g)}" ${cur===g?"selected":""}>${esc(g)}</option>`).join("");
+    }
+    // 보고서 신고 ID 자동완성 (datalist) — 활성 LIVE 50건 hint 제공, 직접 입력도 가능
+    const ridList = document.getElementById("r-rid-list");
+    if (ridList && c.live_ids) {
+      ridList.innerHTML = c.live_ids
+        .map(x => `<option value="${esc(x.id)}">${esc(x.label)}</option>`)
+        .join("");
+    }
+  } catch (e) {
+    console.warn("catalog load 실패:", e);
+  }
+}
+
+function renderStats(s) {
+  const fmtDelay = v => (v == null || isNaN(v))
+    ? `<span class="kpi-value" style="color:#9CA3AF;font-size:18px">—</span>`
+    : `<div class="kpi-value">${v}<span class="unit">일</span></div>`;
+
+  const card = (icon, color, label, valueHtml, sub) => `
+    <div class="kpi-card">
+      <div class="kpi-icon ${color}">${icon}</div>
+      <div class="kpi-body">
+        <div class="kpi-label">${label}</div>
+        ${valueHtml}
+        <div class="kpi-sub">${sub}</div>
+      </div>
+    </div>`;
+
+  document.getElementById("stats").innerHTML = [
+    card("📄", "blue",   "총 민원 수",
+      `<div class="kpi-value">${s.total}<span class="unit">건</span></div>`,
+      "전체 누적 민원"),
+    card("🔔", "red",    "매우 높음 (긴급)",
+      `<div class="kpi-value">${s.critical}<span class="unit">건</span></div>`,
+      "즉시 조치 필요"),
+    card("📅", "green",  "오늘 신규 민원",
+      `<div class="kpi-value">${s.today_new || 0}<span class="unit">건</span></div>`,
+      "오늘 접수된 민원"),
+    card("⏰", "yellow", "평균 처리 지연일",
+      fmtDelay(s.avg_delay_30d),
+      "최근 30일 기준"),
+    card("📊", "purple", "평균 처리 지연일",
+      fmtDelay(s.avg_delay_365d),
+      "최근 1년 기준"),
+  ].join("");
+}
+
+function renderMap(reports) {
+  if (!state.map) {
+    const region = ADMIN && ADMIN.region;
+    const center = region && region.center ? region.center : [36.019, 129.343];
+    const zoom = region && region.zoom ? region.zoom : 12;
+    state.map = L.map("map").setView(center, zoom);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(state.map);
+    state.focusLayer = L.layerGroup().addTo(state.map);
+  }
+  // 초기 마커는 찍지 않음 — 옆 TOP 목록 클릭 시 focusReportOnMap()으로 해당 건만 표시
+  setTimeout(()=>state.map.invalidateSize(), 50);
+}
+
+function focusReportOnMap(rid) {
+  const r = state.reports.find(x => x.id === rid);
+  if (!r || !state.map) return;
+  state.focusLayer.clearLayers();
+
+  // 그룹 final_score 우선 (긴급도DB·위험도 TOP 표와 일치). 없으면 단일 risk_score.
+  const emg = (state.emergencyGroups || []).find(g => g.group_id === r.group_id);
+  const score = (emg && emg.final_score != null) ? emg.final_score : r.risk_score;
+  const tier  = (emg && emg.tier) ? emg.tier : r.tier;
+  const color = tierColor(tier.color);
+
+  const marker = L.marker([r.lat, r.lon], {
+    icon: L.divIcon({
+      className: "risk-pin",
+      html: `<div style="background:${color};color:white;border:2px solid white;
+        border-radius:50%;width:32px;height:32px;display:flex;align-items:center;
+        justify-content:center;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.3);
+        font-size:11px">${score}</div>`,
+      iconSize: [32, 32], iconAnchor: [16, 16]
+    })
+  }).bindPopup(
+    `<div style="line-height:1.7;font-size:13px">` +
+      `<b>${tier.emoji} 긴급도 ${score}</b><br>` +
+      `${esc(r.item)} <b>${r.damage_rate}단계</b><br>` +
+      (r.address ? `📍 ${esc(r.address)}<br>` : "") +
+      `보호구역(300m): 🧒 어린이 <b>${r.n_child||0}</b> · 👵 노인 <b>${r.n_elder||0}</b><br>` +
+      (r.nearest_zone_name ? `최근접: ${esc(r.nearest_zone_name)} (${Math.round(r.nearest_zone_distance_m||0)}m)<br>` : "") +
+      `ID: <code>${r.id}</code><br>` +
+      `상태: ${statusLabel(r.status)}<br>` +
+      `<a href="#" onclick="showDetail('${r.id}');return false">상세 보기</a>` +
+    `</div>`
+  );
+  state.focusLayer.addLayer(marker);
+
+  // 300m 보호구역 반경 원 (신고 위치)
+  const radius = r.zone_radius_m || 300;
+  state.focusLayer.addLayer(L.circle([r.lat, r.lon], { radius,
+    color: "#7C3AED", weight: 1, fillColor: "#7C3AED", fillOpacity: 0.08 })
+    .bindTooltip(`${radius}m 영향권`));
+
+  // 보호구역 마커 (child=빨강, elder=보라)
+  (r.nearby_protection || []).forEach(s => {
+    if (typeof s.lat === "number" && typeof s.lon === "number") {
+      const isChild = s.group === "child";
+      const bg = isChild ? "#E53E3E" : "#7C3AED";
+      const icon = isChild ? "🧒" : "👵";
+      state.focusLayer.addLayer(L.marker([s.lat, s.lon], {
+        icon: L.divIcon({
+          className: "zone-pin",
+          html: `<div style="background:${bg};color:white;border:2px solid white;
+            border-radius:4px;padding:2px 6px;font-size:10px;font-weight:600;
+            white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.3)">${icon} ${esc(s.name)}</div>`,
+          iconSize: null, iconAnchor: [30, 10]
+        })
+      }).bindPopup(
+        `<b>${esc(s.name)}</b><br>${esc(s.kind||"")} · ${Math.round(s.distance_m)}m`));
+    }
+  });
+
+  // 1km 원이 보이게 fit + 팝업 자동 오픈
+  const latPad = 0.012, lonPad = 0.014;
+  state.map.fitBounds([[r.lat - latPad, r.lon - lonPad], [r.lat + latPad, r.lon + lonPad]]);
+  marker.openPopup();
+}
+
+async function loadReports() {
+  const status = document.getElementById("f-status").value;
+  const minRisk = document.getElementById("f-min-risk").value;
+  const qs = new URLSearchParams({ page: 1, limit: 30 });
+  if (status) qs.set("status", status);
+  if (minRisk) qs.set("min_risk", minRisk);
+  document.getElementById("list-hint").innerHTML = '<span class="spinner"></span>';
+  try {
+    const res = await api("/api/admin/reports?" + qs);
+    state.lastReportsRes = res;   // emergency 늦게 와도 재렌더 가능하도록 캐시
+    renderReportsTable(res);
+    document.getElementById("list-hint").textContent = `${res.total}건`;
+  } catch (e) {
+    document.getElementById("list-hint").textContent = "로드 실패";
+  }
+}
+
+function renderReportsTable(res) {
+  const el = document.getElementById("reports-table");
+  if (!res.items.length) {
+    el.innerHTML = `<div class="hint">조건에 맞는 신고가 없습니다.</div>`;
+    return;
+  }
+  // ── group_id 별로 묶음 — 같은 물품(feature matching) 신고들은 1행으로 통합 ──
+  const groups = new Map();
+  for (const r of res.items) {
+    const gid = r.group_id || `_solo_${r.id}`;
+    if (!groups.has(gid)) groups.set(gid, []);
+    groups.get(gid).push(r);
+  }
+  // emergency 캐시에서 그룹 final_score 끌어옴 (긴급도DB 와 동일 점수)
+  const emgMap = new Map();
+  for (const g of (state.emergencyGroups || [])) {
+    emgMap.set(g.group_id, g);
+  }
+  const rows = [];
+  for (const [gid, members] of groups) {
+    members.sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0));
+    const rep = members[0];
+    const emg = emgMap.get(gid);
+    // 그룹 final_score 우선, 없으면 (단일/legacy) 대표 risk_score
+    const score = (emg && emg.final_score != null) ? emg.final_score : (rep.risk_score || 0);
+    const tier = (emg && emg.tier) ? emg.tier : rep.tier;
+    rows.push({ rep, members, gid, count: members.length, score, tier });
+  }
+  rows.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+  el.innerHTML = `
+    <div style="max-height:400px;overflow-y:auto">
+    <table>
+      <thead><tr>
+        <th>긴급도</th><th>품목</th><th>보호구역(300m)</th><th>상태</th><th>접수</th>
+      </tr></thead>
+      <tbody>
+      ${rows.map(({rep: r, members, gid, count, score, tier}) => {
+        const addr = (r.address && r.address.address) ? r.address.address : "";
+        // 대표 신고 ID 표시 (group_id 대신). count>1이면 "외 N건"
+        const idBadge = (count > 1)
+          ? `<br><small style="color:#1E40AF;font-weight:700" title="${esc(r.group_id||'')}">👥 ${esc(r.id)} 외 ${count - 1}건</small>`
+          : `<br><small style="color:#666" title="${esc(r.group_id||'')}">${esc(r.id)}</small>`;
+        return `
+        <tr class="row" onclick="focusReportOnMap('${r.id}')">
+          <td><span class="risk-badge ${riskClass(score)}">
+            ${tier.emoji} ${score}</span></td>
+          <td>${esc(r.item)}<br><small style="color:#888">손상 ${r.damage_rate}단계</small>${idBadge}</td>
+          <td>🧒 <b>${r.n_child||0}</b> · 👵 <b>${r.n_elder||0}</b><br>
+              ${r.nearest_zone_name ? `<small style="color:#888">최근접 ${esc(r.nearest_zone_name)} (${Math.round(r.nearest_zone_distance_m||0)}m)</small>` : `<small style="color:#999">반경 밖</small>`}
+              ${addr ? `<br><small style="color:#1B3E8E">📍 ${esc(addr)}</small>` : ""}</td>
+          <td><span class="status-badge status-${r.status}">${statusLabel(r.status)}</span></td>
+          <td><small>${r.created_at.slice(5,16).replace("T"," ")}</small></td>
+        </tr>`;
+      }).join("")}
+      </tbody>
+    </table>
+    </div>
+  `;
+}
+
+function showDetail(rid) {
+  const r = state.reports.find(x => x.id === rid);
+  if (!r) return;
+  const body = document.getElementById("modal-body");
+  const imgUrl = r.image_url || "";
+  body.innerHTML = `
+    <h3 style="margin-bottom:10px">${r.tier.emoji} ${r.id}</h3>
+    <img class="detail-img" src="${imgUrl}" alt="${r.id}"
+         onclick="openLightbox('${imgUrl}')"
+         onerror="this.style.display='none'"/>
+    <div class="row"><span class="k">품목</span><span><b>${esc(r.item)}</b></span></div>
+    <div class="row"><span class="k">손상도</span><span><b>${r.damage_rate}단계</b></span></div>
+    <div class="row"><span class="k">긴급도</span><span>
+      ${(() => {
+        const emg = (state.emergencyGroups || []).find(g => g.group_id === r.group_id);
+        const sc = (emg && emg.final_score != null) ? emg.final_score : r.risk_score;
+        const tr = (emg && emg.tier) ? emg.tier : r.tier;
+        return `<span class="risk-badge ${riskClass(sc)}">${tr.emoji} ${sc} (${tr.label})</span>`;
+      })()}
+    </span></div>
+    <div class="row"><span class="k">최근접 보호구역</span><span>
+      ${r.nearest_zone_name ? `${r.nearest_zone_group==="child"?"🧒":"👵"} ${esc(r.nearest_zone_name)} <small style="color:#888">${esc(r.nearest_zone_kind||"")}</small> (${Math.round(r.nearest_zone_distance_m||0)}m)` : '<small style="color:#999">반경 밖</small>'}
+    </span></div>
+    <div class="row"><span class="k">300m 내 보호구역</span><span>
+      🧒 어린이 <b>${r.n_child||0}</b>개 · 👵 노인 <b>${r.n_elder||0}</b>개
+    </span></div>
+    <div class="row"><span class="k">주소</span><span>${r.address ? esc(r.address) : '<small style="color:#999">미확인</small>'}</span></div>
+    <div class="row"><span class="k">좌표</span><span>${r.lat.toFixed(5)}, ${r.lon.toFixed(5)}</span></div>
+    <div id="detail-map"></div>
+    <div class="row"><span class="k">접수</span><span>${r.created_at}</span></div>
+    <div class="row"><span class="k">그룹</span><span>
+      ${r.group_id ? `<code style="background:#F0F4FF;padding:2px 6px;border-radius:4px">${esc(r.group_id)}</code>` : '<small style="color:#999">없음</small>'}
+    </span></div>
+    ${r.duplicate_of ? `
+    <div style="margin:10px 0;padding:10px;background:#FFF5F0;border-left:3px solid #C05621;border-radius:4px">
+      <div style="font-weight:600;color:#C05621;margin-bottom:6px">
+        🔁 중복 의심: <code>${esc(r.duplicate_of)}</code> (매치 ${r.match_score||0}점)
+      </div>
+      ${r.match_viz ? `
+        <img src="/${r.match_viz}" style="width:100%;border-radius:6px;cursor:pointer"
+             onclick="openLightbox('/${r.match_viz}')"
+             alt="feature matching 시각화"/>
+        <small style="color:#777">keypoint 매칭선 — 두 사진이 같은 물품으로 판정된 근거</small>
+      ` : '<small style="color:#999">매칭 시각화 없음</small>'}
+    </div>` : ""}
+    <div class="row"><span class="k">상태</span><span>
+      ${r.status === "completed"
+        ? `<span class="status-badge status-completed">${statusLabel(r.status)}</span>
+           <small style="color:#999;margin-left:8px">🔒 처리 완료된 신고는 변경 불가</small>`
+        : `<select id="upd-status" onchange="updateStatus('${r.id}', this.value)">
+            ${["pending","in_progress","completed","rejected"].map(s =>
+              `<option value="${s}" ${s===r.status?"selected":""}>${statusLabel(s)}</option>`).join("")}
+          </select>`
+      }
+    </span></div>
+    <div style="margin-top:16px;text-align:right">
+      <button class="btn light sm" onclick="closeModal()">닫기</button>
+    </div>
+  `;
+  document.getElementById("modal").classList.add("open");
+  setTimeout(() => renderDetailMap(r), 30);
+}
+
+function renderDetailMap(r) {
+  const el = document.getElementById("detail-map");
+  if (!el) return;
+  if (state.detailMap) { state.detailMap.remove(); state.detailMap = null; }
+  const map = L.map(el, { scrollWheelZoom: false }).setView([r.lat, r.lon], 15);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+
+  // 신고 지점 마커 (tier 색상)
+  const color = tierColor(r.tier.color);
+  L.marker([r.lat, r.lon], {
+    icon: L.divIcon({
+      className: "risk-pin",
+      html: `<div style="background:${color};color:white;border:2px solid white;
+        border-radius:50%;width:30px;height:30px;display:flex;align-items:center;
+        justify-content:center;font-weight:700;font-size:11px;
+        box-shadow:0 1px 4px rgba(0,0,0,.4)">📍</div>`,
+      iconSize: [30, 30], iconAnchor: [15, 15]
+    })
+  }).addTo(map).bindPopup(`<b>${esc(r.item)}</b><br>위험도 ${r.risk_score}`);
+
+  // 보호구역 반경 원 (300m)
+  const radius = r.zone_radius_m || 300;
+  L.circle([r.lat, r.lon], { radius, color: "#7C3AED",
+    weight: 1, fillColor: "#7C3AED", fillOpacity: 0.08 })
+    .addTo(map).bindTooltip(`${radius}m 영향권`);
+
+  // 반경 내 보호구역 마커 (child=🧒빨강, elder=👵보라)
+  const zones = r.nearby_protection || [];
+  const bounds = [[r.lat, r.lon]];
+  zones.forEach(s => {
+    if (typeof s.lat === "number" && typeof s.lon === "number") {
+      bounds.push([s.lat, s.lon]);
+      const isChild = s.group === "child";
+      const bg = isChild ? "#E53E3E" : "#7C3AED";
+      const icon = isChild ? "🧒" : "👵";
+      L.marker([s.lat, s.lon], {
+        icon: L.divIcon({
+          className: "zone-pin",
+          html: `<div style="background:${bg};color:white;border:2px solid white;
+            border-radius:4px;padding:2px 6px;font-size:10px;font-weight:600;
+            white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.3)">${icon} ${esc(s.name)}</div>`,
+          iconSize: null, iconAnchor: [30, 10]
+        })
+      }).addTo(map).bindPopup(
+        `<b>${esc(s.name)}</b><br>${esc(s.kind||"")} · ${Math.round(s.distance_m)}m`);
+    }
+  });
+  // 1km 원이 보이도록 fitBounds
+  const latPad = 0.012, lonPad = 0.014;
+  map.fitBounds([[r.lat - latPad, r.lon - lonPad], [r.lat + latPad, r.lon + lonPad]]);
+  state.detailMap = map;
+}
+
+function openLightbox(url) {
+  if (!url) return;
+  document.getElementById("lightbox-img").src = url;
+  document.getElementById("lightbox").classList.add("open");
+}
+function closeLightbox() {
+  document.getElementById("lightbox").classList.remove("open");
+}
+
+function closeModal() {
+  document.getElementById("modal").classList.remove("open");
+  if (state.detailMap) { state.detailMap.remove(); state.detailMap = null; }
+}
+
+async function updateStatus(rid, status) {
+  try {
+    await api(`/api/admin/reports/${rid}/status`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    const r = state.reports.find(x => x.id === rid);
+    if (r) r.status = status;
+    closeModal();
+    loadAll();
+  } catch (e) {
+    alert("업데이트 실패: " + e.message);
+  }
+}
+
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  document.querySelectorAll(".tab-panel").forEach(x => x.classList.remove("active"));
+  t.classList.add("active");
+  document.getElementById("tab-" + t.dataset.tab).classList.add("active");
+});
+
+async function doSearch() {
+  const query = document.getElementById("s-query").value.trim();
+  if (!query) return;
+  const source = document.getElementById("s-source").value;
+  const k = parseInt(document.getElementById("s-k").value) || 8;
+  const el = document.getElementById("search-result");
+  el.innerHTML = `<div class="hint"><span class="spinner"></span> 검색 중…</div>`;
+  try {
+    const res = await api("/api/admin/search", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, k, source: source || null }),
+    });
+    if (!res.results.length) { el.innerHTML = "<div class='hint'>결과 없음</div>"; return; }
+    el.innerHTML = `
+      <table><thead><tr><th>유사도</th><th>소스</th><th>문서</th></tr></thead><tbody>
+      ${res.results.map(r => `
+        <tr><td><b>${r.similarity}</b></td>
+        <td>${esc(r.metadata.source||"")}</td>
+        <td>${esc(r.document)}</td></tr>`).join("")}
+      </tbody></table>
+    `;
+  } catch (e) { el.innerHTML = `<div class="hint">실패: ${esc(e.message)}</div>`; }
+}
+
+async function doEstimate() {
+  const item = document.getElementById("e-item").value.trim() || null;
+  const dmgRaw = document.getElementById("e-damage").value;
+  const damage_rate = dmgRaw ? parseInt(dmgRaw) : null;
+  if (!item) { alert("품목을 선택하세요"); return; }
+  // 드롭다운 선택값으로 쿼리 자동 생성
+  const query = `${item}${damage_rate ? " 파손율 "+damage_rate+"단계" : ""} 수리비`;
+  const k = parseInt(document.getElementById("e-k").value) || 8;
+  const el = document.getElementById("estimate-result");
+  el.innerHTML = `<div class="hint"><span class="spinner"></span> 유사 사례 검색 + LLM 생성 중…</div>`;
+  try {
+    const res = await api("/api/admin/estimate", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, k, item, damage_rate }),
+    });
+    const s = res.stats;
+    const sBlock = s ? `
+      <div class="metrics">
+        <div class="metric"><div class="k">표본</div><div class="v">${s.n}</div></div>
+        <div class="metric"><div class="k">중앙값</div><div class="v">${s.median.toLocaleString()}원</div></div>
+        <div class="metric"><div class="k">25~75%</div>
+          <div class="v">${s.q25.toLocaleString()}~${s.q75.toLocaleString()}</div></div>
+        <div class="metric"><div class="k">평균±편차</div>
+          <div class="v">${s.mean.toLocaleString()} ±${s.std.toLocaleString()}</div></div>
+      </div>` : "";
+    el.innerHTML = `
+      ${sBlock}
+      <div class="result">${fmt(res.reply)}</div>
+      <details style="margin-top:10px"><summary>참고 사례 ${res.cases.length}건</summary>
+        <ul>${res.cases.map(c => `<li>${esc(c)}</li>`).join("")}</ul>
+      </details>`;
+  } catch (e) { el.innerHTML = `<div class="hint">실패: ${esc(e.message)}</div>`; }
+}
+
+async function doBrief() {
+  const group_id = document.getElementById("b-gid").value.trim();
+  if (!group_id) return;
+  const k = parseInt(document.getElementById("b-k").value) || 6;
+  const el = document.getElementById("brief-result");
+  el.innerHTML = `<div class="hint"><span class="spinner"></span> 그룹 자료 수집 + LLM 생성 중…</div>`;
+  try {
+    const res = await api("/api/admin/brief", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ group_id, k }),
+    });
+    const cases = res.similar_cases || [];
+    const dr = res.decision_row;
+    const casesTable = cases.length ? `
+      <div class="subtitle">나. 동일 유사 물건의 수리 사례</div>
+      <div class="source-note">[출처: 과거 견적 DB]</div>
+      <table class="form">
+        <thead><tr>
+          <th style="width:8%">기호</th>
+          <th>품목</th>
+          <th style="width:14%">손상률(%)</th>
+          <th style="width:20%">수리비(원)</th>
+          <th>업체</th>
+        </tr></thead>
+        <tbody>
+          ${cases.map(c => `
+            <tr>
+              <td><b>${esc(c.symbol)}</b></td>
+              <td>${esc(c.item)}</td>
+              <td class="num">${esc(String(c.damage_rate))}</td>
+              <td class="num">${Number(c.cost).toLocaleString()}</td>
+              <td>${esc(c.company)}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>` : `<div class="hint">유사 사례 없음</div>`;
+
+    const decisionTable = dr ? `
+      <div class="title-bar">Ⅵ. 예상 수리비의 결정</div>
+      <table class="form">
+        <thead><tr>
+          <th style="width:8%">기호</th>
+          <th>품목</th>
+          <th style="width:10%">수량</th>
+          <th style="width:22%">중앙값(원)</th>
+          <th style="width:28%">권장 범위(원)</th>
+          <th>비고</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td><b>1</b></td>
+            <td>${esc(dr.item)}</td>
+            <td class="num">${dr.qty}</td>
+            <td class="num">${Number(dr.median).toLocaleString()}</td>
+            <td class="num">${Number(dr.range_low).toLocaleString()} ~ ${Number(dr.range_high).toLocaleString()}</td>
+            <td>${esc(dr.note)}</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3">합계(중앙값 기준)</td>
+            <td class="num">${Number(dr.median * dr.qty).toLocaleString()}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>` : "";
+
+    el.innerHTML = `
+      <div class="appraisal">
+        <div class="title-bar">감정평가액의 산출근거 및 결정 의견</div>
+        ${casesTable}
+        ${decisionTable}
+        <div class="subtitle">다. 결정 의견</div>
+        <div class="opinion">${fmt(res.reply)}</div>
+      </div>
+      <details style="margin-top:14px"><summary>신고 ${res.reports.length}건</summary>
+        <ul>${res.reports.map(c => `<li>${esc(c)}</li>`).join("")}</ul></details>
+      <details><summary>긴급도 ${res.emergency.length}건</summary>
+        <ul>${res.emergency.map(c => `<li>${esc(c)}</li>`).join("")}</ul></details>
+      <details><summary>유사 견적 ${res.estimates.length}건</summary>
+        <ul>${res.estimates.map(c => `<li>${esc(c)}</li>`).join("")}</ul></details>`;
+  } catch (e) { el.innerHTML = `<div class="hint">실패: ${esc(e.message)}</div>`; }
+}
+
+async function doReport() {
+  const report_id = document.getElementById("r-rid").value.trim();
+  if (!report_id) { alert("신고 ID 를 선택해주세요."); return; }
+  const el = document.getElementById("report-result");
+  el.innerHTML = `<div class="hint"><span class="spinner"></span> 신고 자료 조회 + 과거 사례 + LLM 생성 중… (15~30초 예상)</div>`;
+  try {
+    const res = await api("/api/admin/report", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ report_id }),
+    });
+    const d = res.data || {};
+    const stats = d.stats || {};
+    const user = d.user || {};
+    const emg = d.emergency || {};
+    const officer = d.officer || {};
+    const cases = d.past_cases || [];
+    const fmtNum = (v) => (v == null || v === "") ? "-" : Number(v).toLocaleString();
+    const meta = `<div class="hint" style="margin-bottom:10px">
+      📄 ${esc(report_id)} · 모델: ${esc(res.model || "default")} · 표본 ${stats.n||0}건 · 평균 ${stats.avg_cost ? fmtNum(stats.avg_cost)+"원" : "-"} · 평균 ${stats.avg_days || "-"}일</div>`;
+
+    // 담당 부서 (이름·연락처가 placeholder 면 부서만)
+    const noName = !officer.name || /^\(.*\)$/.test(officer.name);
+    const noPhone = !officer.phone || /^\(.*\)$/.test(officer.phone);
+    const officerLine = `${esc(officer.department || '-')}${noName ? '' : ' · ' + esc(officer.name)}${noPhone ? '' : ' (' + esc(officer.phone) + ')'}`;
+
+    // 민원인 줄 (User_DB 미등록이면 phone 별도 표기 안함)
+    const userMatched = user.matched !== false;
+    const userLine = userMatched
+      ? `${esc(user.name || '-')} ${user.phone ? `<span style="color:#64748B">(${esc(user.phone)})</span>` : ''}`
+      : `<span style="color:#888">${esc(user.name || '(미상)')}</span>`;
+
+    // 가. 파손 내용 — 긴급도 매칭된 경우에만 두 번째 bullet 추가 (미집계는 줄 자체 생략)
+    const damageBullet = emg.matched
+      ? `<li>누적 신고 <b>${emg.frequency}</b>회, 종합 점수 <b>${emg.final_score}</b> → 보수 우선순위 높음</li>`
+      : "";
+
+    // 사례 행 + 평균/최근값 footer
+    const casesRows = cases.map(m => `
+      <tr>
+        <td>${esc(String(m.Report_Date || '').slice(0,10))}</td>
+        <td>${esc(m.Item || '-')}</td>
+        <td class="num">${esc(String(m.Damage_Rate ?? '-'))}</td>
+        <td class="num">${fmtNum(m.Cost)}</td>
+        <td class="num">${esc(String(m.Repair_Days ?? '-'))}</td>
+        <td>${esc(m.Company_Info || '-')}</td>
+      </tr>`).join('');
+    const casesTable = cases.length ? `
+      <table class="form">
+        <thead><tr>
+          <th style="width:14%">수리일</th><th>품목</th>
+          <th style="width:10%">손상</th><th style="width:18%">수리비(원)</th>
+          <th style="width:10%">소요(일)</th><th>시공업체</th>
+        </tr></thead>
+        <tbody>
+          ${casesRows}
+          <tr style="background:#F5F7FA;font-weight:700">
+            <td colspan="3">평균</td>
+            <td class="num">${fmtNum(stats.avg_cost)}원</td>
+            <td class="num">${stats.avg_days || '-'}</td><td>-</td>
+          </tr>
+          <tr style="background:#F5F7FA;font-weight:700">
+            <td colspan="3">최근값${stats.recent_year ? '('+esc(String(stats.recent_year))+'년)' : ''}</td>
+            <td class="num">${fmtNum(stats.recent_cost)}원</td>
+            <td class="num">${stats.recent_days || '-'}</td><td>-</td>
+          </tr>
+        </tbody>
+      </table>` : `<div class="hint" style="padding:10px">(과거 수리 사례 데이터 없음 — 해당 품목의 견적 이력 부재)</div>`;
+
+    // 다. 예상 수리비 산출
+    const noStats = !cases.length;
+    const costTable = noStats ? `
+      <table class="form">
+        <tr><th style="width:30%">예상 수리비</th><td>산출 곤란 — 현장 실측 후 확정 예정</td></tr>
+        <tr><th>예상 소요기간</th><td>현장 실측 필요</td></tr>
+        <tr><th>계약방법</th><td>${esc(d.contract_method || '수의계약(현장 실측 기반)')}</td></tr>
+      </table>` : `
+      <table class="form">
+        <tr><th style="width:30%">예상 수리비</th><td>약 <b>${fmtNum(stats.avg_cost)}원</b> <span style="color:#64748B">(과거 동일조건 보수 실적 평균 적용)</span></td></tr>
+        <tr><th>예상 소요기간</th><td>약 <b>${stats.avg_days}일</b></td></tr>
+        <tr><th>계약방법</th><td>${esc(d.contract_method || '-')} <span style="color:#64748B">(예산 2천만원 이하 기준)</span></td></tr>
+      </table>`;
+
+    // 1. 민원 개요 (key-value table)
+    const overviewTable = `
+      <table class="form">
+        <tr><th style="width:30%">민원 번호</th><td><code style="background:#F0F4FF;padding:2px 6px;border-radius:4px">${esc(d.report_id || '-')}</code></td></tr>
+        <tr><th>민 원 인</th><td>${userLine}</td></tr>
+        <tr><th>접수일시</th><td>${esc(d.report_date_fmt || '-')}</td></tr>
+        <tr><th>신고 지역</th><td>${esc(d.location || '-')}</td></tr>
+        <tr><th>품목 / 손상단계</th><td><b>${esc(d.item || '-')}</b> / ${d.damage_stage || '-'}단계</td></tr>
+        ${d.description ? `<tr><th>민원내용</th><td>${esc(d.description)}</td></tr>` : ''}
+      </table>`;
+
+    el.innerHTML = `${meta}
+      <div class="appraisal" style="background:#fff;padding:20px;border:1px solid #e5e7eb;border-radius:10px">
+        <div style="text-align:center;margin-bottom:8px;font-size:18px;font-weight:700;color:#0F172A">
+          ${esc(d.location || '')} ${esc(d.item || '')} 보수 민원 처리계획 보고
+        </div>
+        <div style="text-align:center;color:#64748B;font-size:12px;margin-bottom:18px">
+          보고일자: ${esc(d.today_str || '')} · 담당: ${officerLine}
+        </div>
+
+        <div class="title-bar">1. 민원 개요</div>
+        ${overviewTable}
+
+        <div class="title-bar">2. 파손 확인 및 검토</div>
+        <div class="subtitle">가. 파손 내용</div>
+        <ul style="padding-left:20px;line-height:1.8;color:#0F172A">
+          <li><b>${esc(d.item || '-')}</b> 파손 <b>${d.damage_stage || '-'}단계</b> 발생</li>
+          ${damageBullet}
+        </ul>
+
+        <div class="subtitle">나. 과거 수리 사례</div>
+        <div class="source-note">[출처: 과거 견적 DB · ${cases.length}건]</div>
+        ${casesTable}
+
+        <div class="subtitle">다. 예상 수리비 산출</div>
+        ${costTable}
+      </div>`;
+  } catch (e) { el.innerHTML = `<div class="hint">실패: ${esc(e.message)}</div>`; }
+}
+
+async function loadChatLogs() {
+  const user = document.getElementById("cl-user").value.trim();
+  const date = document.getElementById("cl-date").value;
+  const rating = document.getElementById("cl-rating").value;
+  const qs = new URLSearchParams();
+  if (user) qs.set("user_id", user);
+  if (date) qs.set("date", date);
+  if (rating) qs.set("rating", rating);
+  const el = document.getElementById("chatlogs-result");
+  const stEl = document.getElementById("chatlogs-stats");
+  el.innerHTML = `<div class="hint"><span class="spinner"></span> 로딩…</div>`;
+  try {
+    const [logs, stats] = await Promise.all([
+      api("/api/admin/chat-logs?" + qs.toString()),
+      api("/api/admin/chat-logs/stats"),
+    ]);
+    stEl.innerHTML = `전체 ${stats.total}건 · 👍 ${stats.good} · 👎 ${stats.bad} · 사용자 ${stats.unique_users}명`
+      + (logs.total !== stats.total ? ` · 필터 결과 ${logs.total}건` : "");
+    if (!logs.items.length) {
+      el.innerHTML = `<div class="hint">결과 없음</div>`; return;
+    }
+    el.innerHTML = `
+      <div style="max-height:500px;overflow-y:auto">
+      <table>
+        <thead><tr><th style="width:140px">시각</th><th style="width:100px">사용자</th>
+          <th>질문 → 답변</th><th style="width:70px">평가</th></tr></thead>
+        <tbody>
+        ${logs.items.map(r => {
+          const fb = r.feedback === "good" ? "👍"
+                   : r.feedback === "bad"  ? "👎"
+                   : "—";
+          const color = r.feedback === "bad" ? "background:#FFF5F5" : "";
+          return `<tr style="${color}">
+            <td><small>${esc(r.timestamp.slice(5,16).replace("T"," "))}</small></td>
+            <td><small>${esc(r.user_name)}<br>${esc(r.user_id)}</small></td>
+            <td><div style="color:#1B3E8E;font-weight:600;margin-bottom:4px">
+              💬 ${esc(r.message)}</div>
+              <div style="color:#333;white-space:pre-wrap">${esc(r.reply)}</div>
+              ${r.feedback_note ? `<div style="color:#c11;margin-top:4px;font-size:11px">
+                📝 ${esc(r.feedback_note)}</div>` : ""}
+            </td>
+            <td style="text-align:center;font-size:16px">${fb}</td>
+          </tr>`;
+        }).join("")}
+        </tbody>
+      </table>
+      </div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="hint">실패: ${esc(e.message)}</div>`;
+  }
+}
+window.loadChatLogs = loadChatLogs;
+
+window.showDetail = showDetail;
+window.closeModal = closeModal;
+window.updateStatus = updateStatus;
+window.focusReportOnMap = focusReportOnMap;
+
+// 헤더에 관리자 표시
+if (ADMIN) {
+  const regionTag = ADMIN.region && ADMIN.region.label ? ` · ${ADMIN.region.label}` : "";
+  document.getElementById("admin-user").textContent =
+    `👤 ${ADMIN.name || ADMIN.username}${regionTag}`;
+}
+loadAll();
+
+// ── SSE 실시간 스트림 ─────────────────────────────────
+function toast(type, title, msg, rid) {
+  const stack = document.getElementById("toast-stack");
+  const el = document.createElement("div");
+  el.className = "toast " + (type || "");
+  el.innerHTML = `<div class="ttl">${esc(title)}</div>
+    <div>${esc(msg)}</div>
+    ${rid ? `<div class="lnk" onclick="showDetail('${rid}')">상세 보기 →</div>` : ""}`;
+  stack.appendChild(el);
+  setTimeout(()=> el.style.opacity = 0, 7000);
+  setTimeout(()=> el.remove(), 7600);
+}
+
+function setSseStatus(state, text) {
+  const s = document.getElementById("sse-status");
+  s.classList.remove("live", "down");
+  if (state) s.classList.add(state);
+  document.getElementById("sse-text").textContent = text;
+}
+
+let _sseBackoff = 1000;
+let _sseHelloAt = 0;
+let _sseFailCount = 0;
+function connectSSE() {
+  if (!ADMIN || !ADMIN.token) return;
+  setSseStatus(null, "연결중…");
+  const url = `/api/admin/stream?token=${encodeURIComponent(ADMIN.token)}`;
+  const es = new EventSource(url);
+
+  es.addEventListener("hello", () => {
+    setSseStatus("live", "실시간 연결됨");
+    _sseBackoff = 1000;
+    _sseHelloAt = Date.now();
+    _sseFailCount = 0;
+  });
+  es.addEventListener("ping", () => { /* heartbeat */ });
+
+  es.addEventListener("report.new", (e) => {
+    const r = JSON.parse(e.data);
+    const tier = r.tier?.label || "";
+    const emoji = r.tier?.emoji || "🆕";
+    const cls = r.risk_score >= 2.4 ? "crit" : r.risk_score >= 1.9 ? "high" : "";
+    const zoneDesc = (r.n_child||r.n_elder)
+      ? `보호구역 어린이${r.n_child||0}·노인${r.n_elder||0}`
+      : (r.nearest_zone_name ? `최근접 ${r.nearest_zone_name} ${Math.round(r.nearest_zone_distance_m||0)}m` : "보호구역 외");
+    toast(cls, `${emoji} 신규 신고: ${r.item}`,
+      `위험도 ${r.risk_score} (${tier}) · ${zoneDesc}`,
+      r.id);
+    loadAll();
+  });
+
+  es.addEventListener("report.updated", (e) => {
+    loadAll();
+  });
+
+  es.onerror = async () => {
+    es.close();
+    _sseFailCount++;
+
+    // hello 를 한 번도 못 받고 2회 이상 실패 → 토큰 만료 의심. 인증 체크 엔드포인트로 확인.
+    if (_sseFailCount >= 2 && !_sseHelloAt) {
+      try {
+        const r = await fetch("/api/admin/catalog", {
+          headers: { "X-Admin-Token": ADMIN.token },
+        });
+        if (r.status === 401) {
+          setSseStatus("down", "인증 만료 — 다시 로그인 해주세요");
+          localStorage.removeItem("admin_session");
+          setTimeout(() => location.replace("/admin/login"), 1200);
+          return;  // 재시도 루프 중단
+        }
+      } catch (_) { /* 네트워크 일시 장애면 재시도 계속 */ }
+    }
+
+    setSseStatus("down", `연결 끊김 · ${_sseBackoff/1000}초 후 재시도`);
+    setTimeout(connectSSE, _sseBackoff);
+    _sseBackoff = Math.min(_sseBackoff * 2, 30000);
+  };
+}
+connectSSE();
+</script>
+</body>
+</html>

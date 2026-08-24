@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>공공기물 파손 신고</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Malgun Gothic',
+                 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+    background: #F5F7FA; min-height: 100vh;
+    display: flex; justify-content: center;
+  }
+  .app {
+    width: 100%; max-width: 480px; height: 100vh;
+    background: #F5F7FA; display: flex; flex-direction: column;
+  }
+  .header {
+    background: #1B3E8E; color: white; padding: 12px 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.15);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .header .title { font-weight: 600; }
+  .header .sub { font-size: 11px; font-weight: 400; opacity: .85; margin-top: 2px; }
+  .header .user { font-size: 12px; text-align: right; opacity: .9; }
+  .header .logout {
+    display: inline-block; background: rgba(255,255,255,.2); color: white;
+    border: none; padding: 4px 10px; border-radius: 12px; font-size: 11px;
+    cursor: pointer; margin-top: 4px;
+  }
+  .header .logout:hover { background: rgba(255,255,255,.35); }
+  .chat { flex: 1; overflow-y: auto; padding: 14px 10px; }
+  .msg { display: flex; margin-bottom: 10px; gap: 8px; align-items: flex-end; }
+  .msg.bot .avatar { background: #1B3E8E; color: white; }
+  .msg.user { justify-content: flex-end; }
+  .msg .avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0; background: #4A90D9;
+  }
+  .bubble {
+    padding: 10px 14px; border-radius: 16px; max-width: 78%;
+    font-size: 14px; line-height: 1.5; word-break: break-word;
+    box-shadow: 0 1px 2px rgba(0,0,0,.08);
+  }
+  .msg.bot .bubble { background: #FFFFFF; border-bottom-left-radius: 4px; }
+  .msg.user .bubble { background: #D6E9F7; color: #111; border-bottom-right-radius: 4px; }
+  .feedback-row { display: flex; gap: 4px; margin-top: 4px; padding-left: 44px; }
+  .feedback-btn {
+    background: #FFF; border: 1px solid #ddd; border-radius: 12px;
+    padding: 2px 10px; font-size: 11px; cursor: pointer; color: #666;
+  }
+  .feedback-btn:hover { background: #F3F4F7; }
+  .feedback-btn.active-good { background: #DCFCE7; border-color: #86efac; color: #15803D; }
+  .feedback-btn.active-bad  { background: #FEE2E2; border-color: #fca5a5; color: #B91C1C; }
+  .feedback-done { font-size: 11px; color: #999; padding-left: 44px; margin-top: 4px; }
+  .bubble img.photo {
+    display: block; max-width: 100%; border-radius: 8px; margin-bottom: 6px;
+  }
+  .bubble strong { font-weight: 700; }
+  .typing-dots { display: flex; gap: 4px; padding: 8px 12px; align-items: center; }
+  .typing-dots span {
+    width: 6px; height: 6px; background: #888; border-radius: 50%;
+    animation: blink 1.3s infinite;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: .2s; }
+  .typing-dots span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }
+
+  .input-area { background: #EFEFEF; padding: 10px; border-top: 1px solid #ccc; }
+  .chat-row {
+    display: flex; align-items: center; gap: 6px;
+    background: white; border-radius: 22px; padding: 4px 4px 4px 10px;
+  }
+  .icon-btn {
+    flex: 0 0 36px; height: 36px; border-radius: 50%; border: none;
+    background: #EEE; cursor: pointer; display: flex; align-items: center;
+    justify-content: center; font-size: 18px;
+  }
+  .icon-btn.send { background: #1B3E8E; color: white; }
+  .icon-btn:hover { filter: brightness(.95); }
+  #text-input {
+    flex: 1; border: none; outline: none; font-size: 14px; padding: 8px 4px;
+    background: transparent;
+  }
+  .hint { font-size: 11px; color: #888; padding: 6px 4px 0; text-align: center; }
+
+  .btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .btn {
+    flex: 1; min-width: 0; padding: 12px; border: none; border-radius: 12px;
+    background: white; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  .btn.primary { background: #1B3E8E; color: white; }
+  .btn:hover:not(:disabled) { filter: brightness(.95); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .grid-damage .btn { padding: 10px 4px; font-size: 12px; line-height: 1.3; }
+  .map-wrap { border-radius: 10px; overflow: hidden; margin-bottom: 8px; }
+  #map { height: 280px; }
+  .loc-info { font-size: 13px; color: #222; padding: 6px 4px; font-weight: 600; }
+  select {
+    width: 100%; padding: 10px; border-radius: 10px;
+    border: 1px solid #ccc; background: white; font-size: 13px;
+  }
+  .num-row { display: flex; gap: 6px; margin: 6px 0; }
+  .num-row input {
+    flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 13px;
+  }
+  .cancel-row { text-align: right; margin-bottom: 6px; }
+  .cancel-btn {
+    background: none; border: none; color: #888; cursor: pointer;
+    font-size: 12px; text-decoration: underline;
+  }
+  /* 드래그앤드롭 오버레이 */
+  body.dragging::after {
+    content: "📷 여기에 사진을 놓으세요";
+    position: fixed; inset: 0;
+    background: rgba(27, 62, 142, 0.12);
+    border: 3px dashed #1B3E8E;
+    display: grid; place-items: center;
+    font-size: 22px; font-weight: 700; color: #152E6B;
+    pointer-events: none; z-index: 9999;
+  }
+
+  /* 알림 종 + 패널 — 헤더 우측 (로그아웃 옆) 배치 */
+  .bell-fab {
+    position: relative;
+    width: 36px; height: 36px; border-radius: 50%;
+    background: rgba(255,255,255,.18); color: white; border: none;
+    cursor: pointer;
+    font-size: 18px; display: flex; align-items: center; justify-content: center;
+    transition: background .15s;
+    margin-right: 6px;
+  }
+  .bell-fab:hover { background: rgba(255,255,255,.32); }
+  .bell-fab .badge {
+    position: absolute; top: -4px; right: -4px;
+    background: #E53E3E; color: white; font-size: 10px; font-weight: 700;
+    padding: 1px 5px; border-radius: 10px; min-width: 16px; text-align: center;
+    border: 2px solid #1B3E8E;
+    line-height: 1.2;
+  }
+  .notif-panel {
+    position: fixed; right: 12px; top: 56px; z-index: 1001;
+    width: min(360px, calc(100vw - 24px)); max-height: 70vh;
+    background: white; border-radius: 14px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.25);
+    display: none; flex-direction: column; overflow: hidden;
+  }
+  .notif-panel.open { display: flex; }
+  .notif-head {
+    padding: 12px 14px; background: #1B3E8E; color: white;
+    display: flex; justify-content: space-between; align-items: center;
+    font-weight: 700; font-size: 14px;
+  }
+  .notif-head button {
+    background: rgba(255,255,255,.2); border: none; color: white;
+    border-radius: 10px; padding: 4px 10px; font-size: 11px; cursor: pointer;
+  }
+  .notif-head button:hover { background: rgba(255,255,255,.35); }
+  .notif-list { flex: 1; overflow-y: auto; padding: 6px; }
+  .notif-item {
+    padding: 10px 12px; border-radius: 10px; background: #F8F9FC;
+    margin-bottom: 6px; font-size: 13px; line-height: 1.45;
+  }
+  .notif-item.unread { background: #FFF7DA; border-left: 3px solid #F59E0B; }
+  .notif-item .when { font-size: 11px; color: #888; margin-top: 4px; }
+  .notif-item .st-badge {
+    display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 10px; font-weight: 700; margin-right: 6px;
+  }
+  .notif-item .st-completed  { background: #DCFCE7; color: #15803D; }
+  .notif-item .st-rejected   { background: #FEE2E2; color: #B91C1C; }
+  .notif-item .st-in_progress{ background: #FEF3C7; color: #B45309; }
+  .notif-empty { padding: 40px 20px; text-align: center; color: #999; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div>
+      <div class="title">💬 공공기물 파손 신고</div>
+      <div class="sub">본인 신고만 조회·접수됩니다 🔒</div>
+    </div>
+    <div class="user">
+      <button class="bell-fab" id="bell-fab" onclick="toggleNotif()" title="내 신고 알림">
+        🔔
+        <span class="badge" id="notif-badge" style="display:none">0</span>
+      </button>
+      <div id="user-name">-</div>
+      <button class="logout" onclick="logout()">로그아웃</button>
+    </div>
+  </div>
+  <div class="chat" id="chat"></div>
+  <div class="input-area" id="input-area"></div>
+</div>
+
+<!-- 알림 패널 -->
+<div class="notif-panel" id="notif-panel">
+  <div class="notif-head">
+    <span>🔔 내 신고 알림</span>
+    <button onclick="markAllRead()">모두 읽음</button>
+  </div>
+  <div class="notif-list" id="notif-list">
+    <div class="notif-empty">알림을 불러오는 중…</div>
+  </div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// 운영 품목 (config.py::ALLOWED_ITEMS 와 동기화). 시작 시 서버에서 덮어씀.
+let ITEMS_ALL = [
+  "등받이있는벤치", "등받이없는벤치",
+  "보도블록", "점자블록", "보차도경계석",
+  "볼라드", "맨홀",
+  "기타",
+];
+// 서버가 품목 정책을 바꿔도 자동 반영되도록 /api/citizen/items 로 갱신
+fetch("/api/citizen/items").then(r => r.ok ? r.json() : null).then(data => {
+  if (data && Array.isArray(data.items) && data.items.length) {
+    ITEMS_ALL = [...data.items, "기타"];
+  }
+}).catch(() => {});
+const DEFAULT_MAP_CENTER = [36.019, 129.343];
+
+const state = { stage: "idle", pending: {}, map: null, marker: null };
+const chatHistory = []; // LLM 맥락 유지
+
+// ── 세션 체크 ───────────────────────────────────────────────
+const SESSION = (() => {
+  try { return JSON.parse(localStorage.getItem("citizen_session") || "null"); }
+  catch { return null; }
+})();
+if (!SESSION || !SESSION.user_id) {
+  location.replace("/login");
+}
+function logout() {
+  localStorage.removeItem("citizen_session");
+  location.href = "/login";
+}
+
+// ── 알림 종 ───────────────────────────────────────────────
+const NOTIF_KEY = SESSION ? `notif_last_read_${SESSION.user_id}` : null;
+let notifCache = [];
+
+async function fetchNotifications() {
+  if (!SESSION) return;
+  try {
+    const r = await fetch(`/api/citizen/notifications?user_id=${encodeURIComponent(SESSION.user_id)}`);
+    if (!r.ok) return;
+    const d = await r.json();
+    notifCache = d.notifications || [];
+    renderNotif();
+    updateBadge();
+  } catch (e) { /* silent */ }
+}
+
+function getLastRead() {
+  return NOTIF_KEY ? (localStorage.getItem(NOTIF_KEY) || "") : "";
+}
+function setLastRead(iso) {
+  if (NOTIF_KEY) localStorage.setItem(NOTIF_KEY, iso);
+}
+
+function updateBadge() {
+  const last = getLastRead();
+  const unread = notifCache.filter(n => (n.updated_at || "") > last).length;
+  const badge = document.getElementById("notif-badge");
+  if (!badge) return;
+  if (unread > 0) {
+    badge.textContent = unread > 99 ? "99+" : unread;
+    badge.style.display = "inline-block";
+  } else {
+    badge.style.display = "none";
+  }
+}
+
+function _escHtml(s) {
+  return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+function renderNotif() {
+  const list = document.getElementById("notif-list");
+  if (!list) return;
+  const last = getLastRead();
+  const name = (SESSION && SESSION.name) ? SESSION.name : (SESSION ? SESSION.user_id : "고객");
+  if (!notifCache.length) {
+    list.innerHTML = `<div class="notif-empty">처리중·완료된 신고가 아직 없습니다.<br><small style="color:#bbb">상태가 바뀌면 여기에 표시됩니다.</small></div>`;
+    return;
+  }
+  const STATUS_LABEL = { completed: "처리완료", rejected: "반려", in_progress: "처리중" };
+  list.innerHTML = notifCache.map(n => {
+    const unread = (n.updated_at || "") > last;
+    const dateStr = (n.updated_at || "").slice(0, 10);
+    const whenStr = n.updated_at ? n.updated_at.replace("T", " ").slice(0, 16) : "";
+    const itemHtml = `<strong>${_escHtml(n.item)}</strong>(${_escHtml(n.id)})`;
+    let msg = "";
+    if (n.status === "completed") {
+      msg = `${_escHtml(name)}님이 신고하신 ${itemHtml}가 ${dateStr}에 처리되었습니다. 감사합니다.`;
+    } else if (n.status === "rejected") {
+      msg = `${_escHtml(name)}님이 신고하신 ${itemHtml}는 반려되었습니다. 자세한 내용은 담당 부서에 문의해주세요.`;
+    } else if (n.status === "in_progress") {
+      msg = `${_escHtml(name)}님이 신고하신 ${itemHtml}는 현재 처리 중입니다.`;
+    } else {
+      msg = `${itemHtml} 상태: ${_escHtml(n.status)}`;
+    }
+    const stLabel = STATUS_LABEL[n.status] || n.status;
+    return `<div class="notif-item${unread ? " unread" : ""}">
+      <span class="st-badge st-${_escHtml(n.status)}">${_escHtml(stLabel)}</span>${msg}
+      <div class="when">${_escHtml(whenStr)}</div>
+    </div>`;
+  }).join("");
+}
+
+function toggleNotif() {
+  const p = document.getElementById("notif-panel");
+  if (!p) return;
+  p.classList.toggle("open");
+  if (p.classList.contains("open")) fetchNotifications();
+}
+
+function markAllRead() {
+  // 서버 updated_at 이 local time (timezone 없는 ISO) 이라 UTC 쓰면 9시간 mismatch
+  const d = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  const localISO = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
+    + `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  setLastRead(localISO);
+  renderNotif();
+  updateBadge();
+}
+
+if (SESSION) {
+  fetchNotifications();
+  setInterval(fetchNotifications, 30000);
+}
+// 페이지 밖 클릭 시 패널 닫기
+document.addEventListener("click", (e) => {
+  const p = document.getElementById("notif-panel");
+  const f = document.getElementById("bell-fab");
+  if (!p || !f) return;
+  if (!p.classList.contains("open")) return;
+  if (p.contains(e.target) || f.contains(e.target)) return;
+  p.classList.remove("open");
+});
+
+const chatEl = document.getElementById("chat");
+const inputEl = document.getElementById("input-area");
+
+function escapeHtml(s) {
+  return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+function format(s) {
+  return escapeHtml(s).replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/\n/g,"<br>");
+}
+function append(role, html, id=null) {
+  const m = document.createElement("div");
+  m.className = `msg ${role}`;
+  if (id) m.id = id;
+  m.innerHTML = role === "bot"
+    ? `<div class="avatar">🤖</div><div class="bubble">${html}</div>`
+    : `<div class="bubble">${html}</div><div class="avatar">🙋</div>`;
+  chatEl.appendChild(m);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return m;
+}
+function bot(text, imgUrl=null, remember=true, turn_id=null) {
+  const img = imgUrl ? `<img class="photo" src="${imgUrl}"/>` : "";
+  const m = append("bot", img + format(text));
+  if (remember) chatHistory.push({ role: "assistant", text });
+  if (turn_id) appendFeedback(m, turn_id);
+  return m;
+}
+
+function appendFeedback(botMsgEl, turn_id) {
+  const row = document.createElement("div");
+  row.className = "feedback-row";
+  row.innerHTML = `
+    <button class="feedback-btn" data-r="good" title="도움됨">👍</button>
+    <button class="feedback-btn" data-r="bad"  title="잘못된 답변">👎</button>`;
+  botMsgEl.insertAdjacentElement("afterend", row);
+  row.querySelectorAll(".feedback-btn").forEach(b => {
+    b.onclick = () => sendFeedback(row, turn_id, b.dataset.r);
+  });
+}
+
+async function sendFeedback(row, turn_id, rating) {
+  let note = null;
+  if (rating === "bad") {
+    note = prompt("어떤 점이 잘못됐나요? (빈칸 가능)", "") || null;
+  }
+  try {
+    await api("/api/citizen/feedback", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ turn_id, rating, note }),
+    });
+    const done = document.createElement("div");
+    done.className = "feedback-done";
+    done.textContent = rating === "good"
+      ? "✓ 피드백 감사합니다"
+      : "✓ 의견 접수. 더 나은 답변을 위해 개선하겠습니다";
+    row.replaceWith(done);
+  } catch (e) {
+    row.querySelectorAll(".feedback-btn").forEach(b => b.disabled = false);
+    alert("피드백 전송 실패: " + e.message);
+  }
+}
+function user(text, imgUrl=null, remember=true) {
+  const img = imgUrl ? `<img class="photo" src="${imgUrl}"/>` : "";
+  append("user", img + format(text));
+  if (remember) chatHistory.push({ role: "user", text });
+}
+
+let _thinking = null;
+function showThinking() {
+  if (_thinking) return;
+  _thinking = append("bot",
+    `<div class="typing-dots"><span></span><span></span><span></span></div>`);
+}
+function hideThinking() {
+  if (_thinking) { _thinking.remove(); _thinking = null; }
+}
+
+async function api(path, opts={}) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error(`API ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+// ══════════════════════════════════════════════════════════════
+// IDLE — 기본 입력창 (텍스트 질문 OR 사진 업로드)
+// ══════════════════════════════════════════════════════════════
+function renderIdle() {
+  state.stage = "idle";
+  inputEl.innerHTML = `
+    <div class="chat-row">
+      <label for="file-input" class="icon-btn" title="사진 업로드">📷</label>
+      <input type="file" id="file-input" accept="image/*" hidden>
+      <input type="text" id="text-input" placeholder="질문을 입력하거나 📷로 사진 업로드">
+      <button class="icon-btn send" id="send-btn" title="보내기">➤</button>
+    </div>
+    <div class="hint">글을 쓰면 챗봇 답변 · 사진을 올리면 신고 시작</div>
+  `;
+  const ti = document.getElementById("text-input");
+  document.getElementById("file-input").onchange = onFileSelected;
+  document.getElementById("send-btn").onclick = onSendMessage;
+  ti.addEventListener("keydown", e => { if (e.key === "Enter") onSendMessage(); });
+  ti.focus();
+}
+
+async function onSendMessage() {
+  const ti = document.getElementById("text-input");
+  const text = (ti?.value || "").trim();
+  if (!text) return;
+  user(text);
+  ti.value = "";
+  showThinking();
+  try {
+    const res = await api("/api/citizen/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: text,
+        history: chatHistory.slice(0, -1).slice(-10), // 마지막 10개
+        user_id: SESSION.user_id,
+      }),
+    });
+    hideThinking();
+    bot(res.reply, null, true, res.turn_id);
+  } catch (err) {
+    hideThinking();
+    bot("⚠️ 답변 실패: " + err.message);
+  }
+}
+
+async function onFileSelected(e) {
+  await handleUploadedFile(e.target.files[0]);
+}
+async function handleUploadedFile(f) {
+  if (!f) return;
+  // FileReader dataURL — Android 모바일 브라우저에서 blob URL 잘 안 떠서 dataURL 로 통일
+  const url = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error("이미지 읽기 실패"));
+    r.readAsDataURL(f);
+  });
+  user("📷 사진을 올렸어요", url);
+  inputEl.innerHTML = `<div class="hint">AI가 분석 중… 잠시만요 🤖</div>`;
+  showThinking();
+  try {
+    const fd = new FormData();
+    fd.append("image", f);
+    const res = await api("/api/citizen/upload", { method: "POST", body: fd });
+    state.pending = { ...res };
+    hideThinking();
+    if (res.detections && res.detections.length) {
+      const top = res.detections[0];
+      if (res.suggested_item) {
+        // 파손(Damaged) 탐지 — 자동 추천 + 확정 버튼
+        bot(`✅ 사진에서 **${res.suggested_item}** 으로 보이네요 (신뢰도 ${top.confidence.toFixed(2)})\n맞으면 👍, 다른 거면 아래에서 골라주세요.`);
+        renderAwaitItem();
+      } else {
+        // 정상(Normal) 로만 탐지 — 신고 대상 아님, 흐름 중단
+        bot(`ℹ️ 사진에서 **${top.item_ko}** 가 보이는데 **정상 상태**로 판단됐어요 (신뢰도 ${top.confidence.toFixed(2)}).\n파손된 부분이 보이는 사진으로 다시 올려주세요. 📷`);
+        state.pending = {};
+        renderIdle();
+      }
+    } else {
+      // 아예 미탐지 — 사용자가 직접 품목 선택
+      bot("음… 시설물을 자동 인식하지 못했어요 😅\n어떤 시설인지 직접 선택해주세요.");
+      renderAwaitItem();
+    }
+  } catch (err) {
+    hideThinking();
+    bot("⚠️ 분석 실패: " + err.message);
+    renderIdle();
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// REPORT FLOW
+// ══════════════════════════════════════════════════════════════
+function cancelBar() {
+  return `<div class="cancel-row">
+    <button class="cancel-btn" onclick="cancelFlow()">× 신고 취소</button>
+  </div>`;
+}
+function cancelFlow() {
+  state.pending = {};
+  bot("신고를 취소했어요. 다른 거 물어보셔도 되고, 새로 사진 올리셔도 돼요.");
+  renderIdle();
+}
+window.cancelFlow = cancelFlow;
+
+function renderAwaitItem() {
+  state.stage = "await_item";
+  const suggest = state.pending.suggested_item;
+  const options = ITEMS_ALL.map(i => `<option value="${i}">${i}</option>`).join("");
+  inputEl.innerHTML = `
+    ${cancelBar()}
+    ${suggest ? `<div class="btn-row" style="margin-bottom:8px">
+      <button class="btn primary" id="btn-confirm">👍 ${suggest} 맞아요</button>
+    </div>` : ""}
+    <select id="sel-item">
+      <option value="">직접 선택…</option>
+      ${options}
+    </select>
+    <div class="btn-row" style="margin-top:6px">
+      <button class="btn" id="btn-manual">이걸로 신고</button>
+    </div>
+  `;
+  if (suggest) {
+    document.getElementById("btn-confirm").onclick = () => {
+      state.pending.item = suggest;
+      user(`네, **${suggest}** 맞아요 👍`);
+      proceedToLocation();
+    };
+  }
+  document.getElementById("btn-manual").onclick = () => {
+    const v = document.getElementById("sel-item").value;
+    if (!v) return;
+    state.pending.item = v;
+    user(`**${v}** 입니다.`);
+    proceedToLocation();
+  };
+}
+
+// damage_rate 는 서버가 seg 모델로 자동 산정 (silent).
+// 위치는 사진 EXIF GPS 만 사용 — 없으면 사용자가 지도 수동 클릭.
+function proceedToLocation() {
+  if (state.pending.gps) {
+    state.pending.lat = state.pending.gps.lat;
+    state.pending.lon = state.pending.gps.lon;
+    bot("사진에서 위치 정보도 찾았어요 ✨");
+    submitReport();
+  } else {
+    renderAwaitLocation();
+  }
+}
+
+function renderAwaitLocation() {
+  state.stage = "await_location";
+  bot("사진에 GPS가 없네요 📍\n아래 지도에서 **파손된 위치**를 클릭해주세요. (숫자 입력도 가능)");
+  inputEl.innerHTML = `
+    ${cancelBar()}
+    <div class="map-wrap"><div id="map"></div></div>
+    <div class="loc-info" id="loc-info">지도를 클릭하거나 아래에 숫자 입력</div>
+    <div class="num-row">
+      <input type="number" step="0.00001" id="num-lat" placeholder="위도">
+      <input type="number" step="0.00001" id="num-lon" placeholder="경도">
+      <button class="btn" id="btn-apply" style="flex:0 0 60px">적용</button>
+    </div>
+    <div class="btn-row">
+      <button class="btn primary" id="btn-loc-confirm" disabled>✅ 이 위치로 접수</button>
+    </div>
+  `;
+  const map = L.map("map").setView(DEFAULT_MAP_CENTER, 14);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+              { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+  state.map = map;
+  const info = document.getElementById("loc-info");
+  const confirmBtn = document.getElementById("btn-loc-confirm");
+
+  function setMarker(lat, lon) {
+    if (state.marker) state.marker.setLatLng([lat, lon]);
+    else state.marker = L.marker([lat, lon]).addTo(map);
+    state.pending.lat = lat; state.pending.lon = lon;
+    info.textContent = `📍 선택: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    confirmBtn.disabled = false;
+    document.getElementById("num-lat").value = lat.toFixed(5);
+    document.getElementById("num-lon").value = lon.toFixed(5);
+  }
+  map.on("click", (e) => setMarker(e.latlng.lat, e.latlng.lng));
+  document.getElementById("btn-apply").onclick = () => {
+    const la = parseFloat(document.getElementById("num-lat").value);
+    const lo = parseFloat(document.getElementById("num-lon").value);
+    if (isNaN(la) || isNaN(lo)) return alert("위도/경도를 숫자로 입력하세요");
+    setMarker(la, lo); map.setView([la, lo], 15);
+  };
+  confirmBtn.onclick = () => {
+    user(`📍 위치: ${state.pending.lat.toFixed(5)}, ${state.pending.lon.toFixed(5)}`);
+    submitReport();
+  };
+  setTimeout(() => map.invalidateSize(), 100);
+}
+
+async function submitReport() {
+  state.stage = "submitting";
+  inputEl.innerHTML = "";
+  showThinking();
+  try {
+    const body = {
+      id: state.pending.id,
+      item: state.pending.item,
+      lat: state.pending.lat, lon: state.pending.lon, description: "",
+      user_id: SESSION.user_id,
+    };
+    const res = await api("/api/citizen/report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    hideThinking();
+    const t = res.tier || { emoji: "", label: "" };
+    const nChild = res.n_child || 0, nElder = res.n_elder || 0;
+    const nz = res.nearest_zone || {};
+    const zoneLine = nz.name
+      ? `• 최근접 보호구역: **${nz.group==='child'?'🧒':'👵'} ${nz.name}** (${Math.round(nz.distance_m||0)}m)`
+      : `• 최근접 보호구역: 반경(300m) 밖`;
+    const avgLine = (res.avg_repair_days != null)
+      ? `• 평균 수리 소요일: **${res.avg_repair_days}일** (과거 견적 평균)\n`
+      : "";
+    bot(
+      `접수됐어요 🎉\n\n` +
+      `• 품목: **${res.item}**\n` +
+      avgLine +
+      `${zoneLine}\n` +
+      `• 300m 내 보호구역: 🧒 어린이 **${nChild}**개 · 👵 노인 **${nElder}**개\n` +
+      `• ${t.emoji} 위험도: **${res.risk_score}** (${t.label})\n\n` +
+      `신고번호 **${res.id}**\n궁금한 점 있으면 여기서 바로 물어보셔도 돼요 🙌`
+    );
+    state.pending = {};
+    renderIdle();
+  } catch (err) {
+    hideThinking();
+    bot("⚠️ 접수 실패: " + err.message);
+    renderIdle();
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// START
+// ══════════════════════════════════════════════════════════════
+async function showMyReports() {
+  showThinking();
+  try {
+    const res = await api(`/api/citizen/my-reports?user_id=${encodeURIComponent(SESSION.user_id)}`);
+    hideThinking();
+    if (!res.reports.length) {
+      bot("📋 아직 접수된 신고가 없습니다.\n📷 버튼으로 사진을 올려 신고를 시작해보세요.");
+      return;
+    }
+    const lines = res.reports.slice(0, 10).map(r =>
+      `• **${r.id}** · ${r.item} — ${r.status} · ${r.tier_label}`
+    ).join("\n");
+    bot(`📋 **${SESSION.name}** 님의 신고 ${res.count}건 (최신순):\n\n${lines}` +
+        (res.count > 10 ? `\n\n... 외 ${res.count - 10}건` : ""));
+  } catch (e) {
+    hideThinking();
+    bot("⚠️ 내 신고 조회 실패: " + e.message);
+  }
+}
+window.showMyReports = showMyReports;
+
+function start() {
+  // 헤더 유저 표시
+  document.getElementById("user-name").textContent =
+    `👤 ${SESSION.name} (${SESSION.user_id})`;
+
+  bot(`안녕하세요 **${SESSION.name}** 님! 🤖\n본인 신고만 조회·관리됩니다.\n\n` +
+      `📷 **사진**을 올리시면 신고를 시작하고,\n` +
+      `💬 **글**을 쓰시면 본인 신고 상태를 답해드려요.\n` +
+      `상단에 **로그아웃**, 메시지에 "내 신고" 라고 치시면 내역 조회돼요.`,
+      null, false);
+  renderIdle();
+}
+start();
+
+// ── 드래그앤드롭 사진 업로드 ────────────────────────
+let _dragDepth = 0;
+document.addEventListener("dragenter", e => {
+  if (!e.dataTransfer || !e.dataTransfer.types.includes("Files")) return;
+  _dragDepth++;
+  document.body.classList.add("dragging");
+});
+document.addEventListener("dragover", e => {
+  if (e.dataTransfer && e.dataTransfer.types.includes("Files")) e.preventDefault();
+});
+document.addEventListener("dragleave", () => {
+  _dragDepth = Math.max(0, _dragDepth - 1);
+  if (_dragDepth === 0) document.body.classList.remove("dragging");
+});
+document.addEventListener("drop", async e => {
+  if (!e.dataTransfer || !e.dataTransfer.types.includes("Files")) return;
+  e.preventDefault();
+  _dragDepth = 0;
+  document.body.classList.remove("dragging");
+  const f = e.dataTransfer.files[0];
+  if (!f || !f.type.startsWith("image/")) {
+    bot("⚠️ 이미지 파일만 올려주세요.");
+    return;
+  }
+  if (state.stage !== "idle") {
+    bot("지금 진행 중인 흐름을 마치거나 '취소' 후 다시 시도해주세요 🙏");
+    return;
+  }
+  await handleUploadedFile(f);
+});
+</script>
+</body>
+</html>
