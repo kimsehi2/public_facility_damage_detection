@@ -11,11 +11,6 @@
 | `Emergency_DB.csv` | 긴급도 계산용 데이터 | - | 프로젝트 자체 수집 |
 | `User_DB.csv` | 사용자 계정 정보 | - | 데모용 생성 |
 | `전국초중등학교위치표준데이터(1).csv` | 학교 위치 (보호구역 판단용) | - | [공공데이터포털](https://www.data.go.kr) |
-| `chroma_est/` | ChromaDB 벡터 저장소 | ~수백MB | `scripts/rebuild_chroma.py`로 재생성 가능 |
-
-## 샘플 데이터
-
-`sample/` 디렉토리에 참고용 샘플 파일이 포함되어 있습니다.
 
 ## ChromaDB 재구축
 
